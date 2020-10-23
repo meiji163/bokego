@@ -18,9 +18,11 @@ def turn_color(turn):
     return WHITE
 
 def squash(c):
+    '''convert (x,y) coordinate to squashed coordinate in {0,..., N**2-1} '''
     return N * c[0] + c[1]
 
 def unsquash(sq_c):
+    '''convert squashed coordinate sq_c to coordinate c'''
     return divmod(sq_c, N)
 
 def is_on_board(c):
@@ -100,27 +102,24 @@ def possible_ko(board, sq_c):
         return None
 
 class Game():
-    def __init__(self, board = EMPTY_BOARD, ko = None, turn = 0, **kwargs):
+    def __init__(self, board = EMPTY_BOARD, ko = None, turn = 0, moves = []):
         self.turn = turn
         self.ko = ko
         self.board= board
-        self.moves = []
-        if "moves" in kwargs.keys():
-            self.moves = kwargs["moves"]
+        self.moves = moves
 
     def get_board(self):
         '''return board as array'''
-        enc = {BLACK: 1, WHITE: -1, EMPTY: 0}
+        enc = {BLACK: 255, WHITE: -255, EMPTY: 0}
         return [enc[s] for s in self.board]
 
     def __str__(self):
         return '\n'.join(wrap(self.board, N))
     
-    def play_move(self, *argv):
+    def play_move(self, c = None):
         '''play move from self.moves. If a coordinate is given that is played instead.'''
         color = turn_color(self.turn)
-        if len(argv)!= 0:
-            c = argv[0]
+        if c != None:
             try:
                 self.moves[self.turn] = c
             except IndexError:
@@ -130,13 +129,12 @@ class Game():
                 print("No more moves to play.")
             c = self.moves[self.turn]
 
-
         sq_c = squash(c)
         if sq_c == self.ko:
             raise IllegalMove(f"{self}\n Move at %{c} illegally retakes ko.") 
 
         if self.board[sq_c] != EMPTY:
-            raise IllegalMove(f"{self}\n Stone exists at {sq_c}.")
+            raise IllegalMove(f"{self}\n Stone exists at {c}.")
 
         possible_ko_color = possible_ko(self.board, sq_c)
         new_board = place_stone(color, self.board, sq_c)
