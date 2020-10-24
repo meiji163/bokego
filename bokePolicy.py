@@ -1,4 +1,5 @@
 import go
+from parse_sgf import get_moves
 import os
 import numpy as np
 import torch
@@ -39,23 +40,28 @@ def policy_predict(policy, board, device = "cpu"):
     predicts = torch.topk(policy(board).squeeze(0), 3)
     return [go.unsquash(sq_c) for sq_c in predicts[1].tolist()]
 
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "BokeGo Policy Prediction")
     parser.add_argument("path", metavar="path", type = str, nargs = 1, help = "path to model")
     parser.add_argument("--sgf", metavar="sgf", type = str, nargs = 1, help = "path to sgf")
     args = parser.parse_args()
-    print(args.path[0])
-
+    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     pi = Policy()
     pi.load_state_dict(torch.load(args.path[0], map_location=device))
     pi.eval()
+    
+    if args.sgf != None:
+        print(args.sgf)
+        mvs = get_moves(args.sgf[0])
+        g = go.Game(moves = mvs)
 
-    g = go.Game()
+    else:
+        g = go.Game()
+
     uin = ""
     while(uin != 'q'):
+        print(g)
         uin = input("\t- press p to show prediction\n\
         - enter coordinate to play move\n\
         - press q to quit\n")
@@ -63,6 +69,4 @@ if __name__ == "__main__":
             print(policy_predict(pi, g.get_board(), device))
         else:
             g.play_move(tuple([int(i) for i in uin.split(' ')]))
-        print(g)
-       
 
