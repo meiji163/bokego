@@ -1,6 +1,7 @@
 import go
 import os
 import numpy as np
+import pandas as pd
 import torch
 from torch.utils.data import Dataset, DataLoader
 import torch.nn as nn
@@ -37,40 +38,20 @@ class PolicyNet(nn.Module):
         return num_features
 
 class NinebyNineGames(Dataset):
-    def __init__(self, root_dir):
-        '''Read all the sgf files from root_dir'''
-        self.root_dir = root_dir
-        self.sgf_files = [entry for entry in os.scandir(self.root_dir) if entry.path.endswith(".sgf")]
-        self.games = [get_moves(sgf) for sgf in self.sgf_files]
-        #stores previously computed game states
-        #__cache[n] stores board states from game n move i as a dict {i:(board, ko)}
-        self.cache = {} 
-
+    def __init__(self, path, transform = None, scale = 1):
+        '''Read from csv''' 
+        self.boards = pd.read_csv(path)
+        self.path = path
+        self.transform = transform
+        self.scale = scale
     def __len__(self):
-        return sum( len(game) for game in self.games)
-
+        return len(self.boards)
 
     def __getitem__(self, idx):
-        g_idx = 0
-        count = 0
-        while(idx > count + len(self.games[g_idx]) -1 ) :
-            count += len(self.games[g_idx])
-            g_idx += 1
-        if g_idx in self.cache and self.cache[g_idx]:
-            c_boards = self.cache[g_idx] 
-            c_idx = max([i for i in c_boards if i<= idx-count])
-            board, ko = c_boards[c_idx]
-            g = go.Game(board = board, turn = c_idx, ko = ko, moves = self.games[g_idx])
-        else:
-            self.cache[g_idx] = {}
-            g = go.Game( moves = self.games[g_idx])
-            c_idx = 0
-        for i in range(idx-count-c_idx):
-                g.play_move()
-                self.cache[g_idx][c_idx+i+1] = g.board, g.ko
-
-        board, move =  np.array(g.get_board()).reshape(9,9) , g.moves[idx - count]
-        return torch.Tensor(features(g, 10)) , go.squash(move)
+        board, ko, move = self.boards.iloc[idx]
+        ko = (None if ko == "None" else int(ko))
+        g = go.Game(board = board, ko = ko)
+        return torch.Tensor(features(g, self.scale)), move
 
 def features(game: go.Game, scale = 1):
     ''' layer : feature
@@ -95,25 +76,6 @@ def features(game: go.Game, scale = 1):
             go.squash((i,j))), (i,j)) for i in range(9) for j in range(9)]).reshape(9,9)
     return scale*np.stack((black, white, empty, legal, libs, libs_after)) 
 
-def get_moves(sgf):
-    with open(sgf, 'r') as f:
-        match = re.findall(r"[BW]\[(\w*)\]", f.read())
-    mvs = []
-    for mv in match:
-        if len(mv)!= 2:
-            break
-        else: 
-            mvs.append((ord(mv[0])-97, ord(mv[1])-97) )
-    return mvs
-
-def get_result(sgf):
-    with open(sgf, 'r') as f:
-        match = re.match(r"RE\[()\]")
-    if match:
-        return match.group(1)
-    else:
-        return "No result"
- 
 def policy_predict(policy: PolicyNet, game: go.Game , device = "cpu"):
     fts = torch.Tensor(features(game, 10)).unsqueeze(0)
     predicts = torch.topk(policy(fts).squeeze(0), 5)
