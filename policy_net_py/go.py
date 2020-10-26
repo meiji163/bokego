@@ -19,19 +19,18 @@ class Game():
     def __str__(self):
         return '\n'.join(wrap(self.board, N))
 
-    def play_move(self, c = None, testing = False):
+    def play_move(self, sq_c = None, testing = False):
         '''play move from self.moves. If a coordinate is given that is played instead.'''
-        if c == None:
+        if sq_c == None:
             if self.turn >= len(self.moves):
                 print("No more moves to play.")
                 return
-            c = self.moves[self.turn]
-        sq_c = squash(c)
+            sq_c = self.moves[self.turn]
         
         if sq_c == self.ko:
-            raise IllegalMove(f"\n{self}\n Move at {c} illegally retakes ko.")
+            raise IllegalMove(f"\n{self}\n Move at {sq_c} illegally retakes ko.")
         if self.board[sq_c] != EMPTY:
-            raise IllegalMove(f"\n{self}\n There is already a stone at {c}")
+            raise IllegalMove(f"\n{self}\n There is already a stone at {sq_c}")
         color = (WHITE if self.turn%2 ==1 else BLACK) 
         possible_ko_color = possible_ko(self.board, sq_c)
         new_board = place_stone(color, self.board, sq_c)
@@ -53,7 +52,7 @@ class Game():
         # Check for suicide
         new_board, captured = maybe_capture_stones(new_board, sq_c)
         if captured:
-            raise IllegalMove(" \n{self}\n Move at {c} is suicide.")
+            raise IllegalMove(" \n{self}\n Move at {sq_c} is suicide.")
 
         if len(opp_captured) == 1 and possible_ko_color == opp_color:
             new_ko = opp_captured[0] 
@@ -65,9 +64,9 @@ class Game():
             self.ko = new_ko
             self.turn += 1 
 
-    def is_legal(self, c):
+    def is_legal(self, sq_c):
         try:
-            self.play_move(c, testing = True)
+            self.play_move(sq_c, testing = True)
             return True
         except IllegalMove:
             return False
@@ -131,8 +130,7 @@ def flood_fill(board, sq_c):
                 reached.add(sq_n)
     return chain, reached
 
-def get_stone_lib(board, c):
-    sq_c = squash(c)
+def get_stone_lib(board, sq_c):
     stones, borders = flood_fill(board, sq_c)
     return len([sq_b for sq_b in borders if board[sq_b] == EMPTY])
 
