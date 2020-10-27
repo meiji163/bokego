@@ -15,7 +15,7 @@ if __name__ == "__main__":
     args = parser.parse_args() 
     
     print("Loading data...")
-    data = NinebyNineGames(args.d[0], transform = "reflect", scale = SCALE)
+    data = NinebyNineGames(args.d[0], transform = "rot90", scale = SCALE)
     dataloader = DataLoader(data, batch_size = 128, shuffle = True, num_workers = 4)
     print("Number of board positions: {}".format(len(data)))
 
@@ -54,6 +54,6 @@ if __name__ == "__main__":
             if i%2000 == 1999:
                 print(" Loss: ", running_loss)
                 running_loss = 0.0
-        out_path = r"/home/jupyter/BokeGo/policy_net_py/" + "policy_train_" + str(date.today()) + str(epoch) + ".pt"  
+        out_path = r"/home/jupyter/BokeGo/policy_net_py/" + "policy_train_" + str(date.today()) + "_2.pt"  
         torch.save({"model_state_dict": pi.state_dict(), "optimizer_state_dict": optimizer.state_dict()}, out_path)
     
