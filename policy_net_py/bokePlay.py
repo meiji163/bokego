@@ -12,7 +12,7 @@ if  __name__ == "__main__":
     parser.add_argument("path", metavar="MODEL", type = str, nargs = 1, help = "path to model")
     parser.add_argument("--sgf", metavar="SGF", type = str, nargs = 1, help = "path to sgf")
     args = parser.parse_args()
-    
+   
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     pi = PolicyNet(scale = 100)
     checkpt = torch.load(args.path[0], map_location = device)
@@ -25,8 +25,7 @@ if  __name__ == "__main__":
     else:
         g = go.Game()
 
-    uin = ""
-    while(uin != 'q'):
+    while(True):
         print(g)
         uin = input("\t- press p to show prediction\n\
         - enter coordinate to play move\n\
@@ -35,6 +34,8 @@ if  __name__ == "__main__":
             probs, moves  = policy_predict(pi, g, device)
             print(go.unsquash(moves.tolist()))   
             print(probs.tolist())
+        elif uin == 'q':
+            break
         else:
             try:
                 g.play_move( go.squash(tuple([int(i) for i in uin.split(' ')])))

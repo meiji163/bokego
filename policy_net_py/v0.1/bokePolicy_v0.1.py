@@ -16,21 +16,18 @@ class PolicyNet(nn.Module):
         '''6 9x9 input features
         5x5 convolution: 9x9 -> 9x9
         3x3 convolution: 9x9 -> 9x9
-        3x3 convolution: 9x9 -> 7x7
-        2 fully connected hidden layers
+        1 fully connected hidden layers
         output distribution over coords 0-81'''
-        self.conv1 = nn.Conv2d(6, 8, 5, padding = 2)
-        self.conv2 = nn.Conv2d(10, 12, 3, padding = 1) 
-        self.conv3 = nn.Conv2d(12, 15, 3)
-        self.l1 = nn.Linear(15*7*7, 256, bias = False)
-        self.l2 = nn.Linear(256, 170, bias = False)
-        self.l3 = nn.Linear(170 , 81, bias = False)
+        self.conv1 = nn.Conv2d(6, 10, 5, padding = 2)
+        self.conv2 = nn.Conv2d(10, 15, 3, padding = 1) 
+        self.l1 = nn.Linear(15*9*9, 256, bias = False)
+        self.l2 = nn.Linear(256, 128, bias = False)
+        self.l3 = nn.Linear(128 , 81, bias = False)
         self.scale = scale #scalar for the data
 
     def forward(self, x):
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
-        x = F.relu(self.conv3(x))
         x = x.view(-1, self.num_flat_features(x))
         x = F.relu(self.l1(x))
         x = F.relu(self.l2(x))
