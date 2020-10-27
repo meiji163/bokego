@@ -17,9 +17,9 @@ class PolicyNet(nn.Module):
         1 fully connected hidden layer
         output distribution over coords 0-81'''
         self.conv1 = nn.Conv2d(6, 10, 5, padding = 2)
-        self.conv2 = nn.Conv2d(10, 15, 3) 
-        self.l1 = nn.Linear(15*7*7, 200)
-        self.l2 = nn.Linear(200, 81)
+        self.conv2 = nn.Conv2d(10, 15, 3, padding = 1, bias = False) 
+        self.l1 = nn.Linear(15*9*9, 256, bias = False)
+        self.l2 = nn.Linear(256, 81)
         self.scale = scale #scalar for the data
 
     def forward(self, x):
