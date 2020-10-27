@@ -78,7 +78,7 @@ def features(game: go.Game, scale = 1):
 
 def policy_predict(policy: PolicyNet, game: go.Game , device = "cpu"):
     fts = torch.Tensor(features(game, policy.scale)).unsqueeze(0)
-    predicts = torch.topk(F.softmax(policy(fts)).squeeze(0), 5)
-    return {go.unsquash(sq_c): predicts[0].item for sq_c in predicts[1].tolist()}
+    predicts = torch.topk(F.softmax(policy(fts), dim = 1).squeeze(0), 5)
+    return predicts 
 
 

@@ -1,16 +1,11 @@
 import go
-from bokePolicy import features, PolicyNet
+from bokePolicy import features, PolicyNet, policy_predict
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import argparse
-
-def policy_predict(policy: PolicyNet, game: go.Game , device = "cpu"):
-    fts = torch.Tensor(features(game, policy.scal)).unsqueeze(0)
-    predicts = torch.topk(policy(fts).squeeze(0), 5)
-    return {go.unsquash(sq_c): predicts[0].item for sq_c in predicts[1].tolist()}
 
 if  __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Boke Policy Prediction")
@@ -19,8 +14,9 @@ if  __name__ == "__main__":
     args = parser.parse_args()
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    pi = PolicyNet()
-    pi.load_state_dict(torch.load(args.path[0], map_location=device))
+    pi = PolicyNet(scale = 100)
+    checkpt = torch.load(args.path[0], map_location = device)
+    pi.load_state_dict(checkpt["model_state_dict"])
     pi.eval()
     
     if args.sgf != None:
@@ -36,7 +32,12 @@ if  __name__ == "__main__":
         - enter coordinate to play move\n\
         - press q to quit\n")
         if uin == 'p':
-            print(policy_predict(pi, g, device))
+            probs, moves  = policy_predict(pi, g, device)
+            print(go.unsquash(moves.tolist()))   
+            print(probs.tolist())
         else:
-            g.play_move(tuple([int(i) for i in uin.split(' ')]))
+            try:
+                g.play_move( go.squash(tuple([int(i) for i in uin.split(' ')])))
+            except:
+                print("Enter a valid option")
 

@@ -102,7 +102,10 @@ def squash(c):
     return N * c[0] + c[1]
 
 def unsquash(sq_c):
-    return divmod(sq_c, N)
+    if type(sq_c) == list:
+        return [divmod(sq_b, N) for sq_b in sq_c]
+    else:
+        return divmod(sq_c, N)
 
 def is_on_board(c):
     return c[0] % N == c[0] and c[1] % N == c[1]
