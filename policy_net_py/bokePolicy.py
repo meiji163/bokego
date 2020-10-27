@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 
-SCALE = 100
+SCALE = 100.0
 
 class PolicyNet(nn.Module):
     def __init__(self, scale = 1):
@@ -19,7 +19,7 @@ class PolicyNet(nn.Module):
         3x3 convolution: 9x9 -> 7x7
         2 fully connected hidden layers
         output distribution over coords 0-81'''
-        self.conv1 = nn.Conv2d(6, 8, 5, padding = 2)
+        self.conv1 = nn.Conv2d(6, 10, 5, padding = 2)
         self.conv2 = nn.Conv2d(10, 12, 3, padding = 1) 
         self.conv3 = nn.Conv2d(12, 15, 3)
         self.l1 = nn.Linear(15*7*7, 256, bias = False)

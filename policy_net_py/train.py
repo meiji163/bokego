@@ -3,7 +3,7 @@ from tqdm import tqdm, trange
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from bokePolicy import PolicyNet, NinebyNineGames
+from bokePolicy import PolicyNet, NinebyNineGames, SCALE
 from datetime import date 
 import argparse 
 
@@ -15,11 +15,11 @@ if __name__ == "__main__":
     args = parser.parse_args() 
     
     print("Loading data...")
-    data = NinebyNineGames(args.d[0], scale = 100)
-    dataloader = DataLoader(data, batch_size = 128, shuffle = True)
+    data = NinebyNineGames(args.d[0], transform = "reflect", scale = SCALE)
+    dataloader = DataLoader(data, batch_size = 128, shuffle = True, num_workers = 4)
     print("Number of board positions: {}".format(len(data)))
 
-    pi = PolicyNet(scale = 100)
+    pi = PolicyNet(scale = SCALE)
     pi.cuda()
     err = nn.CrossEntropyLoss()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu") 
@@ -34,7 +34,6 @@ if __name__ == "__main__":
                 if torch.is_tensor(v):
                     state[k] = v.cuda()
         pi.train()
-        
      
     epochs = args.e[0] 
     for epoch in range(epochs):
