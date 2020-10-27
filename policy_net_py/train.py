@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from bokePolicy import PolicyNet, NinebyNineGames
-from datetime import datetime
+from datetime import date 
 import argparse 
 
 if __name__ == "__main__":    
@@ -33,8 +33,8 @@ if __name__ == "__main__":
             for k, v in state.items():
                 if torch.is_tensor(v):
                     state[k] = v.cuda()
-
-    pi.train()
+        pi.train()
+        
      
     epochs = args.e[0] 
     for epoch in range(epochs):
@@ -55,7 +55,6 @@ if __name__ == "__main__":
             if i%2000 == 1999:
                 print(" Loss: ", running_loss)
                 running_loss = 0.0
-
-    out_path = r"/home/jupyter/BokeGo/policy_net_py/" + "policy_train_" + str(datetime.now()) + ".pt"    
-    torch.save({"model_state_dict": pi.state_dict(), "optimizer_state_dict": optimizer.state_dict()}, out_path)
+        out_path = r"/home/jupyter/BokeGo/policy_net_py/" + "policy_train_" + str(date.today()) + str(epoch) + ".pt"  
+        torch.save({"model_state_dict": pi.state_dict(), "optimizer_state_dict": optimizer.state_dict()}, out_path)
     

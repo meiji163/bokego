@@ -13,13 +13,14 @@ class PolicyNet(nn.Module):
         super(PolicyNet, self).__init__()
         '''6 9x9 input features
         5x5 convolution 9x9 -> 9x9
-        3x3 convolution 9x9 -> 7x7
+        3x3 convolution 9x9 -> 9x9
         1 fully connected hidden layer
         output distribution over coords 0-81'''
         self.conv1 = nn.Conv2d(6, 10, 5, padding = 2)
-        self.conv2 = nn.Conv2d(10, 15, 3, padding = 1, bias = False) 
+        self.conv2 = nn.Conv2d(10, 15, 3, padding = 1) 
         self.l1 = nn.Linear(15*9*9, 256, bias = False)
-        self.l2 = nn.Linear(256, 81)
+        self.l2 = nn.Linear(256, 128, bias = False)
+        self.l3 = nn.Linear(128 , 81, bias = False)
         self.scale = scale #scalar for the data
 
     def forward(self, x):
@@ -27,7 +28,8 @@ class PolicyNet(nn.Module):
         x = F.relu(self.conv2(x))
         x = x.view(-1, self.num_flat_features(x))
         x = F.relu(self.l1(x))
-        x = self.l2(x)
+        x = F.relu(self.l2(x))
+        x = self.l3(x)
         return x
 
     def num_flat_features(self, x):
