@@ -12,14 +12,14 @@ if __name__ == "__main__":
     parser.add_argument("-d", metavar="DATA", type = str, nargs=1, help = "path to csv", required = True)
     parser.add_argument("-c", metavar="CHECKPOINT", type = str, nargs = 1, help = "path to saved torch model")
     parser.add_argument("-e", metavar="EPOCHS", type = int, nargs =1, help = "number of epochs", default = 1)
-    parser.add_argument("-t", metavar="TRANSFORM", choices = ["rot90","reflect"], help = "transform data", default = None)
+    parser.add_argument("-t", metavar="TRANSFORM", type = str, choices = ["rot90","reflect"], help = "transform data", default = None)
     args = parser.parse_args() 
     
     print("Loading data...")
-    data = NinebyNineGames(args.d[0], transform = "rot90", scale = SCALE)
+    data = NinebyNineGames(args.d[0], transform = args.t, scale = SCALE)
     dataloader = DataLoader(data, batch_size = 128, shuffle = True, num_workers = 5)
     print("Number of board positions: {}".format(len(data)))
-
+    print("Transform: {}".format(args.t))
     pi = PolicyNet(scale = SCALE)
     pi.cuda()
     err = nn.CrossEntropyLoss()
@@ -30,12 +30,13 @@ if __name__ == "__main__":
         checkpt = torch.load(args.c[0], map_location = device)
         pi.load_state_dict(checkpt["model_state_dict"] )
         optimizer.load_state_dict(checkpt["optimizer_state_dict"]) 
+
         for state in optimizer.state.values():
             for k, v in state.items():
                 if torch.is_tensor(v):
                     state[k] = v.cuda()
         pi.train()
-     
+
     epochs = args.e[0] 
     for epoch in range(epochs):
         running_loss = 0.0
@@ -57,4 +58,3 @@ if __name__ == "__main__":
                 running_loss = 0.0
         out_path = r"/home/jupyter/BokeGo/policy_net_py/" + "policy_v0.3_" + str(date.today()) + "_3.pt"  
         torch.save({"model_state_dict": pi.state_dict(), "optimizer_state_dict": optimizer.state_dict()}, out_path)
-    
