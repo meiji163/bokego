@@ -20,20 +20,20 @@ class PolicyNet(nn.Module):
         3 fully connected hidden layers with dropout
         output distribution over coords 0-81'''
         self.conv = nn.Sequential(
-                nn.Conv2d(7,12,5, padding = 2),
+                nn.Conv2d(7,10,5, padding = 2),
                 nn.ReLU(),
-                nn.Conv2d(12,15,3, padding =1),
+                nn.Conv2d(10,16,3, padding =1),
                 nn.ReLU(),
-                nn.Conv2d(15,20,3),
+                nn.Conv2d(16,32,3),
                 nn.ReLU())
         self.lin = nn.Sequential(
-                nn.Linear(20*7*7, 600, bias = False),
-                nn.Dropout(0.5),
+                nn.Linear(32*7*7, 1024 , bias = False),
+                nn.Dropout(0.6),
                 nn.ReLU(),
-                nn.Linear(600, 400, bias = False),
-                nn.Dropout(0.2),
+                nn.Linear(1024, 600, bias = False),
+                nn.Dropout(0.3),
                 nn.ReLU(),
-                nn.Linear(400, 200, bias = False),
+                nn.Linear(600, 200, bias = False),
                 nn.Dropout(0.1),
                 nn.ReLU(),
                 nn.Linear(200, 81)
