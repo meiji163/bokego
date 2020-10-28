@@ -12,7 +12,7 @@ if __name__ == "__main__":
     parser.add_argument("-d", metavar="DATA", type = str, nargs=1, help = "path to csv", required = True)
     parser.add_argument("-c", metavar="CHECKPOINT", type = str, nargs = 1, help = "path to saved torch model")
     parser.add_argument("-e", metavar="EPOCHS", type = int, nargs =1, help = "number of epochs", default = 1)
-    partser.add_argument("-t", metavar="TRANSFORM", choices = {"rot90","reflect"}, help = "transform data", default = None)
+    parser.add_argument("-t", metavar="TRANSFORM", choices = ["rot90","reflect"], help = "transform data", default = None)
     args = parser.parse_args() 
     
     print("Loading data...")
@@ -55,6 +55,6 @@ if __name__ == "__main__":
             if i%2000 == 1999:
                 print(" Loss: ", running_loss)
                 running_loss = 0.0
-        out_path = r"/home/jupyter/BokeGo/policy_net_py/" + "policy_v0.3_" + str(date.today()) + "_2.pt"  
+        out_path = r"/home/jupyter/BokeGo/policy_net_py/" + "policy_v0.3_" + str(date.today()) + "_3.pt"  
         torch.save({"model_state_dict": pi.state_dict(), "optimizer_state_dict": optimizer.state_dict()}, out_path)
     

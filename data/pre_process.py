@@ -3,7 +3,7 @@ import sys
 import os
 import re
 #path to go.py  
-sys.path.append(r"/home/meiji163/Documents/BokeGo/policy_net_py")
+sys.path.append(r"/home/jupyter/BokeGo/policy_net_py")
 import go
 
 def pre_process(root_dir, target_dir):

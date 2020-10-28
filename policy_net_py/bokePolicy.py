@@ -19,8 +19,8 @@ class PolicyNet(nn.Module):
         3x3 convolution: 9x9 -> 7x7
         2 fully connected hidden layers
         output distribution over coords 0-81'''
-        self.conv1 = nn.Conv2d(7, 10, 5, padding = 2)
-        self.conv2 = nn.Conv2d(10, 15, 3, padding = 1) 
+        self.conv1 = nn.Conv2d(7, 12, 5, padding = 2)
+        self.conv2 = nn.Conv2d(12, 15, 3, padding = 1) 
         self.conv3 = nn.Conv2d(15, 20, 3)
         self.l1 = nn.Linear(20*7*7, 500, bias = False)
         self.l2 = nn.Linear(500, 250, bias = False)
@@ -69,7 +69,7 @@ class NinebyNineGames(Dataset):
             x, y = divmod(move, 9)
             move = 9*y + x
 
-        return features(g, scale = self.scale, transform = self.transform), move
+        return features(g, scale = self.scale, transform = self.transform).float(), move
 
 def features(game: go.Game, scale = 1, transform = None):
     ''' go.Game --> (7,9,9) torch.Tensor
@@ -95,9 +95,9 @@ def features(game: go.Game, scale = 1, transform = None):
     oppt *= -turn_num
 
     if color == 1:
-        turn = np.ones((9,9))
+        turn = np.ones((9,9), dtype = float)
     else:
-        turn = np.zeros((9,9))
+        turn = np.zeros((9,9), dtype = float)
 
     legal = np.array([game.is_legal(sq_c) for sq_c in range(81)]).reshape(9,9)
     libs = np.array(game.get_liberties()).reshape(9,9)
