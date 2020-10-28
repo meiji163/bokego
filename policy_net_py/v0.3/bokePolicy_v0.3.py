@@ -17,33 +17,25 @@ class PolicyNet(nn.Module):
         5x5 convolution: 9x9 -> 9x9
         3x3 convolution: 9x9 -> 9x9
         3x3 convolution: 9x9 -> 7x7
-        3 fully connected hidden layers with dropout
+        2 fully connected hidden layers
         output distribution over coords 0-81'''
-        self.conv = nn.Sequential(
-                nn.Conv2d(7,12,5, padding = 2),
-                nn.ReLU(),
-                nn.Conv2d(12,15,3, padding =1),
-                nn.ReLU(),
-                nn.Conv2d(15,20,3),
-                nn.ReLU())
-        self.lin = nn.Sequential(
-                nn.Linear(20*7*7, 600, bias = False),
-                nn.Dropout(0.5),
-                nn.ReLU(),
-                nn.Linear(600, 400, bias = False),
-                nn.Dropout(0.2),
-                nn.ReLU(),
-                nn.Linear(400, 200, bias = False),
-                nn.Dropout(0.1),
-                nn.ReLU(),
-                nn.Linear(200, 81)
-                )
+        self.conv1 = nn.Conv2d(7, 12, 5, padding = 2)
+        self.conv2 = nn.Conv2d(12, 15, 3, padding = 1) 
+        self.conv3 = nn.Conv2d(15, 20, 3)
+        self.l1 = nn.Linear(20*7*7, 500, bias = False)
+        self.l2 = nn.Linear(500, 250, bias = False)
+        self.l3 = nn.Linear(250 , 81, bias = False)
         self.scale = scale #scalar for the data
 
     def forward(self, x):
-        x = self.conv(x)
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
         x = x.view(-1, self.num_flat_features(x))
-        return self.lin(x)
+        x = F.relu(self.l1(x))
+        x = F.relu(self.l2(x))
+        x = self.l3(x)
+        return x
 
     def num_flat_features(self, x):
         size = x.size()[1:]
