@@ -26,9 +26,9 @@ if  __name__ == "__main__":
         g = go.Game()
 
     while(True):
-        print(g)
+        print(g.fb())
         uin = input("\t- press p to show prediction\n\
-        - enter coordinate to play move\n\
+        - enter coordinate \"x y\" to play move\n\
         - press q to quit\n")
         if uin == 'p':
             probs, moves  = policy_predict(pi, g, device)

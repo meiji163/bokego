@@ -10,12 +10,16 @@ class Game():
         self.ko = ko
         self.board= board
         self.moves = moves
+        self.enc = {BLACK: 1, WHITE: -1, EMPTY: 0}
 
     def get_board(self):
-        '''return board as array'''
-        enc = {BLACK: 1, WHITE: -1, EMPTY: 0}
-        return [enc[s] for s in self.board]
+        return [self.enc[s] for s in self.board]
 
+    def fb(self):
+        #fancy board
+        fb = "\t  " +''.join([str(i) for i in range(N)]) +"\n" \
+            + '\n'.join(['\t'+str(i)+' '+self.board[N*i:N*(i+1)] for i in range(N)])
+        return fb
     def __str__(self):
         return '\n'.join(wrap(self.board, N))
 
