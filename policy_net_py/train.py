@@ -12,18 +12,11 @@ if __name__ == "__main__":
     parser.add_argument("-d", metavar="DATA", type = str, nargs=1, help = "path to csv", required = True)
     parser.add_argument("-c", metavar="CHECKPOINT", type = str, nargs = 1, help = "path to saved torch model")
     parser.add_argument("-e", metavar="EPOCHS", type = int, nargs =1, help = "number of epochs", default = 1)
-    parser.add_argument("-t", metavar="N M", type = int, nargs = 2, help = "transform data by 90*N rotation clockwise, and M reflections", default = None)
     args = parser.parse_args() 
     
     print("Loading data...")
-    if args.t:
-        transform = tuple(args.t) 
-        reflect = (" and reflect" if args.t[1] else "")
-        print("Transform: rot {} degrees".format(90*args.t[0]) + reflect)
-    else:
-        transform = None
-    data = NinebyNineGames(args.d[0], transform = transform, scale = SCALE)
-    dataloader = DataLoader(data, batch_size = 128, shuffle = True, num_workers = 5)
+    data = NinebyNineGames(args.d[0], scale = SCALE)
+    dataloader = DataLoader(data, batch_size = 128, shuffle = True, num_workers = 6)
     print("Number of board positions: {}".format(len(data)))
 
     pi = PolicyNet(scale = SCALE)
@@ -67,5 +60,6 @@ if __name__ == "__main__":
             if i%2000 == 1999:
                 print(" Loss: ", running_loss)
                 running_loss = 0.0
-        out_path = r"/home/jupyter/BokeGo/policy_net_py/" + "policy_v0.4_" + str(date.today()) + "_" + str(epochs_trained)+ ".pt"  
-        torch.save({"model_state_dict": pi.state_dict(), "optimizer_state_dict": optimizer.state_dict(), "epoch": epochs_trained}, out_path)
+            if i%30000 == 11440: 
+                out_path = r"/home/jupyter/BokeGo/policy_net_py/" + "policy_v0.5_" + str(date.today()) + "_" + str(epochs_trained)+ ".pt"  
+                torch.save({"model_state_dict": pi.state_dict(), "optimizer_state_dict": optimizer.state_dict(), "epoch": epochs_trained}, out_path)

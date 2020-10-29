@@ -47,15 +47,10 @@ class PolicyNet(nn.Module):
         return num_features
 
 class NinebyNineGames(Dataset):
-    def __init__(self, path, transform = None, scale = 1):
-        '''read boards csv from path. 
-        transform is a tuple (n,m), n = 0,1,2,3 and m = 0,1  
-        which applies a rotation of 90*n clockwise and m reflections to the data.
-        This generates the full symmetry group of the square 
-        '''
+    def __init__(self, path, scale = 1):
+        '''read boards csv from path.'''
         self.boards = pd.read_csv(path)
         self.path = path
-        self.transform = transform
         self.scale = scale
 
     def __len__(self):
@@ -65,17 +60,9 @@ class NinebyNineGames(Dataset):
         board, ko, turn, move = self.boards.iloc[idx]
         ko = (None if ko == "None" else int(ko))
         g = go.Game(board = board, turn = turn, ko = ko)
-        
-        if self.transform: 
-                for _ in range(self.transform[0]):
-                    #rotates 90 deg clockwise
-                    move = (move*9 + 8 - move//9)%81
-                for _ in range(self.transform[1]):
-                    x, y = divmod(move, 9)
-                    move = 9*y + x
-        return features(g, scale = self.scale, transform = self.transform).float(), move
+        return features(g, scale = self.scale).float(), move
 
-def features(game: go.Game, scale = 1, transform = None):
+def features(game: go.Game, scale = 1):
     ''' go.Game --> (19,9,9) torch.Tensor
         layer: feature
         0: player stones
@@ -110,12 +97,6 @@ def features(game: go.Game, scale = 1, transform = None):
 
     fts = np.stack([plyr, oppt, empty, turn, legal]\
             + separate_libs(libs) + separate_libs(libs_after))
-    if transform:
-        out = np.rot90(fts, k = (3*transform[0])%4 , axes = (1,2))
-        if transform[1]:
-            return scale*torch.from_numpy(np.ascontiguousarray(np.transpose(out, axes = (0,2,1))))
-        else:
-            return scale*torch.from_numpy(np.ascontiguousarray(out))
     return scale*torch.from_numpy(fts)
 
 def separate_libs(libs):
