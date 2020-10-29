@@ -17,8 +17,9 @@ class PolicyNet(nn.Module):
     def __init__(self, scale = 1):
         super(PolicyNet, self).__init__()
         '''19 9x9 input features
-        one 5x5 convolution: 9x9 -> 9x9
-        four 3x3 convolution: 9x9 -> 9x9
+        1 5x5 convolution: 9x9 -> 9x9
+        4 3x3 convolution: 9x9 -> 9x9
+        1 1x1 convolution with untied bias: 9x9 -> 81
         output distribution over coords 0-81'''
         self.conv = nn.Sequential(
                 nn.Conv2d(19,64,5, padding = 2),
@@ -110,9 +111,10 @@ def separate_libs(libs):
     a[a<7] = 0
     return list(l.values())
 
-def policy_predict(policy: PolicyNet, game: go.Game , device = "cpu"):
+def policy_predict(policy: PolicyNet, game: go.Game , device = "cpu", k=1):
+    '''Return top k moves of the distribution'''
     fts = features(game, policy.scale).unsqueeze(0).float()
-    predicts = torch.topk(F.softmax(policy(fts), dim = 1).squeeze(0), 5)
+    predicts = torch.topk(F.softmax(policy(fts), dim = 1).squeeze(0), k)
     return predicts 
 
 
