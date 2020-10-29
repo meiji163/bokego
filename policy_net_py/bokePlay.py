@@ -28,10 +28,16 @@ if  __name__ == "__main__":
     while(True):
         print(g.fb())
         uin = input("\t- press p to show prediction\n\
+        - press b to play Boke's top move\n\
         - enter coordinate \"x y\" to play move\n\
         - press q to quit\n")
-        if uin == 'p':
+        if uin == 'p' or uin == 'b':
             probs, moves  = policy_predict(pi, g, device)
+            if uin == 'b':
+                try:
+                    g.play_move(moves[0])
+                except:
+                    g.play_move(moves[1])
             print(go.unsquash(moves.tolist()))   
             print(probs.tolist())
         elif uin == 'q':

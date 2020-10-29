@@ -1,49 +1,43 @@
 import go
 import os
+from math import sqrt
 import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset, DataLoader
+from torch.nn.modules.utils import _pair
+from torch.nn.parameter import Parameter
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 
-SCALE = 10.0
+SCALE = 1.0
 
 class PolicyNet(nn.Module):
     def __init__(self, scale = 1):
         super(PolicyNet, self).__init__()
-        '''7 9x9 input features
-        5x5 convolution: 9x9 -> 9x9
-        3x3 convolution: 9x9 -> 9x9
-        3x3 convolution: 9x9 -> 7x7
-        3 fully connected hidden layers with dropout
+        '''19 9x9 input features
+        one 5x5 convolution: 9x9 -> 9x9
+        four 3x3 convolution: 9x9 -> 9x9
         output distribution over coords 0-81'''
         self.conv = nn.Sequential(
-                nn.Conv2d(7,10,5, padding = 2),
+                nn.Conv2d(19,64,5, padding = 2),
                 nn.ReLU(),
-                nn.Conv2d(10,16,3, padding =1),
+                nn.Conv2d(64,128,3, padding =1),
                 nn.ReLU(),
-                nn.Conv2d(16,32,3),
-                nn.ReLU())
-        self.lin = nn.Sequential(
-                nn.Linear(32*7*7, 1024 , bias = False),
-                nn.Dropout(0.6),
+                nn.Conv2d(128,128,3, padding = 1),
                 nn.ReLU(),
-                nn.Linear(1024, 600, bias = False),
-                nn.Dropout(0.3),
+                nn.Conv2d(128,128,3, padding = 1),
                 nn.ReLU(),
-                nn.Linear(600, 200, bias = False),
-                nn.Dropout(0.1),
+                nn.Conv2d(128,128,3, padding = 1),
                 nn.ReLU(),
-                nn.Linear(200, 81)
-                )
+                Conv2dUntiedBias(9,9,128,1,1))
         self.scale = scale #scalar for the data
 
     def forward(self, x):
         x = self.conv(x)
         x = x.view(-1, self.num_flat_features(x))
-        return self.lin(x)
+        return x 
 
     def num_flat_features(self, x):
         size = x.size()[1:]
@@ -82,15 +76,15 @@ class NinebyNineGames(Dataset):
         return features(g, scale = self.scale, transform = self.transform).float(), move
 
 def features(game: go.Game, scale = 1, transform = None):
-    ''' go.Game --> (7,9,9) torch.Tensor
+    ''' go.Game --> (19,9,9) torch.Tensor
         layer: feature
         0: player stones
         1: opponent stones
         2: empty
         3: turn
         4: legal
-        5: liberties
-        6: liberties after playing'''
+        5-11: liberties
+        12-18: liberties after playing'''
     empty = np.array(game.get_board()).reshape(9,9)
     plyr = empty.copy()
     oppt = empty.copy()
@@ -113,8 +107,9 @@ def features(game: go.Game, scale = 1, transform = None):
     libs = np.array(game.get_liberties()).reshape(9,9)
     libs_after = np.array([go.get_stone_lib(go.place_stone(color, game.board,\
             sq_c), sq_c) for sq_c in range(81)]).reshape(9,9)
-    fts = np.stack([plyr, oppt, empty, turn, legal, libs, libs_after])
 
+    fts = np.stack([plyr, oppt, empty, turn, legal]\
+            + separate_libs(libs) + separate_libs(libs_after))
     if transform:
         out = np.rot90(fts, k = (3*transform[0])%4 , axes = (1,2))
         if transform[1]:
@@ -123,9 +118,59 @@ def features(game: go.Game, scale = 1, transform = None):
             return scale*torch.from_numpy(np.ascontiguousarray(out))
     return scale*torch.from_numpy(fts)
 
+def separate_libs(libs):
+    l = {} 
+    for i in range(1,7):
+        l[i] = libs.copy()
+        a = l[i]
+        a[a != i] = 0
+    l[7] = libs.copy()
+    a = l[7]
+    a[a<7] = 0
+    return list(l.values())
+
 def policy_predict(policy: PolicyNet, game: go.Game , device = "cpu"):
     fts = features(game, policy.scale).unsqueeze(0).float()
     predicts = torch.topk(F.softmax(policy(fts), dim = 1).squeeze(0), 5)
     return predicts 
 
 
+class Conv2dUntiedBias(nn.Module):
+    def __init__(self, height, width, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1):
+        super(Conv2dUntiedBias, self).__init__()
+        kernel_size = _pair(kernel_size)
+        stride = _pair(stride)
+        padding = _pair(padding)
+        dilation = _pair(dilation)
+
+        if in_channels % groups != 0:
+            raise ValueError('in_channels must be divisible by groups')
+        if out_channels % groups != 0:
+            raise ValueError('out_channels must be divisible by groups')
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.padding = padding
+        self.dilation = dilation
+        self.groups = groups
+        self.weight = Parameter(torch.Tensor(
+                out_channels, in_channels // groups, *kernel_size))
+        self.bias = Parameter(torch.Tensor(out_channels, height, width))
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        n = self.in_channels
+        for k in self.kernel_size:
+            n *= k
+        stdv = 1. / sqrt(n)
+        self.weight.data.uniform_(-stdv, stdv)
+        self.bias.data.uniform_(-stdv, stdv)
+
+
+    def forward(self, input):
+        output = F.conv2d(input, self.weight, None, self.stride,
+                        self.padding, self.dilation, self.groups)
+        # add untied bias
+        output += self.bias.unsqueeze(0).repeat(input.size(0), 1, 1, 1)
+        return output
