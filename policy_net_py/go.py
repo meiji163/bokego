@@ -1,3 +1,4 @@
+import re
 import itertools
 from textwrap import wrap
 N = 9 
@@ -5,23 +6,33 @@ WHITE, BLACK, EMPTY = 'O', 'X', '.'
 EMPTY_BOARD = EMPTY*(N**2) 
 
 class Game():
-    def __init__(self, board = EMPTY_BOARD, ko = None, turn = 0, moves = []):
+    '''go.Game: a class to represent a go game. The board is represented as a length N^2 string
+    using "squashed coordinates" 0,1,...,N^2-1.
+    optional parameters: 
+        board: str -- initialize a board position
+        ko: int -- the position of the current ko
+        turn: int -- the current turn number
+        moves: list -- the list of moves played
+        sgf: str -- path to an sgf to initialize from
+        '''
+    def __init__(self, board = EMPTY_BOARD, ko = None, turn = 0, moves = [], sgf = None):
         self.turn = turn
         self.ko = ko
         self.board= board
-        self.moves = moves
+        if sgf:
+            self.moves = self.get_moves(sgf)
+        else:
+            self.moves = moves
         self.enc = {BLACK: 1, WHITE: -1, EMPTY: 0}
 
-    def get_board(self):
-        return [self.enc[s] for s in self.board]
 
-    def fb(self):
-        #fancy board
+    def __str__(self):
         fb = "\t  " +''.join([str(i) for i in range(N)]) +"\n" \
             + '\n'.join(['\t'+str(i)+' '+self.board[N*i:N*(i+1)] for i in range(N)])
         return fb
-    def __str__(self):
-        return '\n'.join(wrap(self.board, N))
+
+    def get_board(self):
+        return [self.enc[s] for s in self.board]
 
     def play_move(self, sq_c = None, testing = False):
         '''play move from self.moves. If a coordinate is given that is played instead.'''
@@ -100,6 +111,17 @@ class Game():
                     liberties[sq_s] = num_libs
                 board = bulk_place_stones('?', board, stones)
         return list(liberties)
+    @staticmethod
+    def get_moves(sgf):
+        with open(sgf, 'r') as f:
+            match = re.findall(r"[BW]\[(\w*)\]", f.read())
+        mvs = []
+        for mv in match:
+            if len(mv)!= 2:
+                break
+            else: 
+                mvs.append(9*(ord(mv[0])-97) + ord(mv[1])-97 )
+        return mvs
 
 #squash converts coordinate pair 0 <= x,y < N  to single integer 0 <= n < N^2
 def squash(c):
@@ -181,7 +203,6 @@ def play_move_incomplete(board, sq_c, color):
 
     for sq_s in my_stones:
         board, _ = maybe_capture_stones(board, sq_s)
-
     return board
 
 def possible_ko(board, sq_c):

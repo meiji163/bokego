@@ -20,18 +20,16 @@ if  __name__ == "__main__":
     pi.eval()
     
     if args.sgf:
-        mvs = get_moves(args.sgf[0])
-        g = go.Game(moves = mvs)
+        g = go.Game(sgf = args.sgf[0])
     else:
         g = go.Game()
 
     while(True):
-        print(g.fb())
+        print(g)
         
         if args.sgf:
             uin = input("\t- press n to see next move in sgf\n\
         - press p to show prediction\n\
-        - enter coordinate \"x y\" to play move\n\
         - press q to quit\n")
         else:
             uin = input("\t- press b to play Boke's top move\n\
@@ -39,23 +37,28 @@ if  __name__ == "__main__":
         - enter coordinate \"x y\" to play move\n\
         - press q to quit\n")
 
-        if uin == 'p' or uin == 'b':
-            probs, moves  = policy_predict(pi, g, device, k = 5)
-            if uin == 'b':
-                try:
-                    g.play_move(moves[0])
-                except:
-                    g.play_move(moves[1])
-            else:
-                print(go.unsquash(moves.tolist()))   
-                print(probs.tolist())
-        elif uin == "n":
+        if not args.sgf and uin == 'b':
+            probs , moves  = policy_predict(pi, g, device, k = 2)
+            try: 
+                g.play_move(moves[0])
+            except:
+                #Boke tried an illegal move?!
+                g.play_move(moves[1])
+        
+        elif args.sgf and uin == 'n':
             g.play_move()
+
+        elif uin == 'p':
+            probs, moves = policy_predict(pi, g, device, k = 5)
+            print(go.unsquash(moves.tolist()))   
+            print(probs.tolist())
+        
         elif uin == 'q':
             break
+        
         else:
             try:
-                g.play_move(go.squash(tuple([int(i) for i in uin.split(' ')])))
+                g.play_move(go.squash(tuple([int(i) for i in uin.split(' ') ])) )
             except:
                 print("Enter a valid option")
 
