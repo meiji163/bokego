@@ -1,9 +1,12 @@
 from copy import copy
-from random import choice
+from random import choice, randrange
+
+import torch
 
 from bokePolicy import PolicyNet, policy_predict
 import go
 from mcts import MCTS, Node
+from selfPlay import sample
 
 
 class Go_MCTS(go.Game, Node):
@@ -43,7 +46,7 @@ class Go_MCTS(go.Game, Node):
         moves'''
         if self.terminal:
             return set()      
-        return {self.make_move(i) for i in self.get_legal_moves()}
+        return {self.make_move(i) for i in self.get_all_legal_moves()}
     
     def find_random_child(self):
         '''Draws legal move from distribution given by policy. If no
@@ -52,11 +55,7 @@ class Go_MCTS(go.Game, Node):
         been played.'''
         if self.terminal:
             return self # Game is over; no moves can be made
-        if self.policy:
-            move = policy_predict(self.policy, self) # NEEDS TO BE FIXED
-        else:
-            move = choice(self.get_legal_moves())  
-        return self.make_move(move)
+        return self.make_move(self.get_move())
 
     def reward(self):
         '''Returns 1 for a win, 0 for a loss.'''
@@ -80,22 +79,34 @@ class Go_MCTS(go.Game, Node):
         return self.terminal
 
     # VERY expensive call, need improve this.
-    def get_legal_moves(self):
+    def get_all_legal_moves(self):
         return [i for i in range(go.N ** 2) if self.is_legal(i)]
+
+    def get_move(self):
+        if self.policy:
+            return sample(policy=self.policy, game=self) # NEEDS TO BE FIXED
+        else:
+            move = randrange(0, go.N ** 2)
+            while not self.is_legal(move):
+                move = randrange(0, go.N ** 2)
+            return move 
 
     def is_game_over(self):
         '''Game is over if there are no more legal moves
         (or if both players pass consecutively, or if a
         player resigns...)'''
-        return len(self.get_legal_moves()) == 0
+        return len(self.get_all_legal_moves()) == 0
 
     def current_winner(self):
         return self.score() > 0
 
 if __name__ == '__main__':
+    pi = PolicyNet()
+    checkpt = torch.load("v0.5/policy_v0.5_2020-10-29_1.pt", map_location = torch.device("cpu"))
+    pi.load_state_dict(checkpt["model_state_dict"])
     NUMBER_OF_ROLLOUTS = 50
     tree = MCTS()
-    board = Go_MCTS()
+    board = Go_MCTS(policy=pi)
     print(board)
     while True:
         while True:
