@@ -2,7 +2,7 @@ import re
 import itertools
 from textwrap import wrap
 N = 9 
-WHITE, BLACK, EMPTY = 'O', 'X', '.'
+WHITE, BLACK, EMPTY = 'o', '*', '.'
 EMPTY_BOARD = EMPTY*(N**2) 
 
 class Game():
@@ -27,9 +27,11 @@ class Game():
 
 
     def __str__(self):
-        fb = "\t  " +''.join([str(i) for i in range(N)]) +"\n" \
-            + '\n'.join(['\t'+str(i)+' '+self.board[N*i:N*(i+1)] for i in range(N)])
-        return fb
+        return "\t  " +' '.join([str(i) for i in range(N)]) +"\n" \
+            + '\n'.join(['\t'+str(i)+' '+ ' '.join( self.board[N*i:N*(i+1)]) for i in range(N)])
+
+    def __len__(self):
+        return len(self.moves)
 
     def get_board(self):
         return [self.enc[s] for s in self.board]
@@ -37,7 +39,7 @@ class Game():
     def play_move(self, sq_c = None, testing = False):
         '''play move from self.moves. If a coordinate is given that is played instead.'''
         if sq_c == None:
-            if self.turn >= len(self.moves):
+            if self.turn >= len(self):
                 print("No more moves to play.")
                 return
             sq_c = self.moves[self.turn]
@@ -86,18 +88,20 @@ class Game():
         except IllegalMove:
             return False
 
-    def score(self):
-        '''returns Bs score minus Ws score'''
+    def score(self, komi = 5.5):
+        '''Calculated using Chinese rules'''
         board = self.board
         while EMPTY in board:
             empty = board.index(EMPTY)
             empties, borders = flood_fill(board, empty)
-            possible_border_color = board[list(borders)[0]]
-            if all(board[sq_b] == possible_border_color for sq_b in borders):
-                board = bulk_place_stones(possible_border_color, board, empties)
+            bd_list = [board[sq_b] for sq_b in borders]
+            if bd_list.count(BLACK) > bd_list.count(WHITE):
+                border_color = BLACK
             else:
-                board = bulk_place_stones('?', board, empties)
-        return board.count(BLACK) - board.count(WHITE)
+                border_color = WHITE
+            board = bulk_place_stones(border_color, board, borders)
+            board = bulk_place_stones(border_color, board, empties)
+        return board.count(BLACK), board.count(WHITE) + komi
 
     def get_liberties(self):
         board = self.board
@@ -111,6 +115,7 @@ class Game():
                     liberties[sq_s] = num_libs
                 board = bulk_place_stones('?', board, stones)
         return list(liberties)
+
     @staticmethod
     def get_moves(sgf):
         with open(sgf, 'r') as f:

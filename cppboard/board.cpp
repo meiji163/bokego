@@ -1,23 +1,28 @@
 #include "board.h"
 #include <iostream>
-#include<vector>
-#include<algorithm>
-
+#include <fstream>
+#include <vector>
+#include <algorithm>
+#include <regex>
 #define BORDER -1
 #define EMPTY 0
 #define BLACK 1
 #define WHITE 2
 
 
-Board::Board(int n){
+Board::Board(int n, const char* sgf ){ 
     this->dim = n;
     this->turn = 0;
     this->bCap = 0;
     this->wCap = 0;
+    this->wPass = false;
+    this->bPass = false;
     this->iKo = -1;
     this->jKo = -1;
     this->isKo = false;
-
+    this->end = false;
+    std::vector< std::pair<int,int> > mvs;
+    this->moves = mvs; 
     this->board = new int*[n+2];
     this->visited = new bool*[n+2];
     for(int i = 0; i<n+2; i++){
@@ -31,6 +36,34 @@ Board::Board(int n){
             }
             this->visited[i][j] = false;
         }
+    } 
+    if(sgf != NULL)
+            this->readSGF(sgf); 
+}
+
+void Board::readSGF(const char* sgf){ 
+    std::ifstream f;
+    std::string line;
+    std::smatch match;
+    std::regex mv(";[BW]\\[(\\w*)\\]");
+    try{
+        f.open(sgf);
+        while(getline(f, line)){
+            for (std::sregex_iterator it = std::sregex_iterator(line.begin(), line.end(), mv); it != std::sregex_iterator(); it++){
+                match = *it;
+                if (match.str(1) == ""){
+                    std::pair <int, int> mv = {-1,-1};
+                    this->moves.push_back(mv);
+                }
+                else{
+                    std::pair <int, int> mv = {int(match.str(1)[0]-96), int(match.str(1)[1])-96};
+                    this->moves.push_back(mv); 
+                }
+            }     
+        }
+    }
+    catch (const std::ifstream::failure& e) {
+        std::cerr << "Couldn't read sgf file";
     }
 }
 
@@ -58,11 +91,11 @@ void Board::disp(){
             if(color == -1){
                 std::cout << "X" << " ";
             }else if(color == 0){
-                std::cout << "_" << " ";
+                std::cout << "." << " ";
             }else if(color == 1){
                 std::cout << "*" << " ";
             }else if(color == 2){
-                std::cout << "o" << " ";
+                std::cout << "O" << " ";
             }else{
                 std::cout << color << " ";
             }
@@ -70,25 +103,47 @@ void Board::disp(){
         std::cout << std::endl;
     }
     std::cout << "Turn: " << this->turn << "| White: " << this->wCap << " | Black: " << this->bCap << std::endl;
+    if (this->end)
+        std::cout << "Game ended." << std::endl;
     std::cout << std::endl;
 }
 
 bool Board::play(int i, int j){
-    if(this->addStone((this->turn %2)+1, i,j)){
+    if(this->addStone((this->turn %2) + 1, i,j)){
         this->turn++;
+        std::pair<int,int> mv = {i,j};
+        this->moves.push_back(mv);
         return true;
     }
     return false;
 }
 
-bool Board::isValidMove(int color, int i, int j){
-    if(this->board[i][j] != 0){
-        return false;
+void Board::pass(int color){
+    if (color == BLACK){
+        if (wPass)
+            this->end = true;
+        this->bPass = true;
     }
+    else if (color == WHITE){
+        if (bPass)
+            this->end = true;
+        this->wPass = true;
+    }
+    this->turn++;
+}
 
-    if(i == this->iKo && j == this->jKo){
+bool Board::isValidMove(int color, int i, int j){
+    if(this->end)
         return false;
-    }
+    if(i == -1 && j== -1)
+        return true;
+
+    if(this->board[i][j] != 0)
+        return false;
+
+    if(i == this->iKo && j == this->jKo)
+        return false;
+    
     int op_color = (color%2) + 1;
 
     bool take = false;
@@ -128,6 +183,11 @@ bool Board::isValidMove(int color, int i, int j){
 
 bool Board::addStone(int color, int i, int j){
     if(this->isValidMove(color, i, j)){
+        if (i == -1 && j == -1){ 
+            //pass = {-1,-1}
+            this->pass(color);
+            return true;
+        }
         this->board[i][j] = color;
 
         for(int k=-1; k<3; k++){
@@ -196,6 +256,9 @@ int** Board::getBoard(){
     return this->board;
 }
 
+std::vector< std::pair<int,int> > Board::getMoves(){
+    return this->moves;
+}
 Board::~Board(){
     for(int i =0; i<this->dim+2; i++){
         delete this->board[i];
@@ -204,4 +267,3 @@ Board::~Board(){
     delete this->board;
     delete this->visited;
 }
-

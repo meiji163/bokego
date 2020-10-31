@@ -4,6 +4,7 @@ from math import sqrt
 import numpy as np
 import pandas as pd
 import torch
+from torch.distributions.categorical import Categorical
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.modules.utils import _pair
 from torch.nn.parameter import Parameter
@@ -61,7 +62,7 @@ class NinebyNineGames(Dataset):
         board, ko, turn, move = self.boards.iloc[idx]
         ko = (None if ko == "None" else int(ko))
         g = go.Game(board = board, turn = turn, ko = ko)
-        return features(g, scale = self.scale).float(), move
+        return features(g, scale = self.scale), move
 
 def features(game: go.Game, scale = 1):
     ''' go.Game --> (19,9,9) torch.Tensor
@@ -93,29 +94,33 @@ def features(game: go.Game, scale = 1):
 
     legal = np.array([game.is_legal(sq_c) for sq_c in range(81)]).reshape(9,9)
     libs = np.array(game.get_liberties()).reshape(9,9)
-    libs_after = np.array([go.get_stone_lib(go.place_stone(color, game.board,\
-            sq_c), sq_c) for sq_c in range(81)]).reshape(9,9)
+    libs_after = np.array([go.get_stone_lib(go.place_stone(color, game.board, sq_c), sq_c)\
+            for sq_c in range(81)]).reshape(9,9)
 
     fts = np.stack([plyr, oppt, empty, turn, legal]\
             + separate_libs(libs) + separate_libs(libs_after))
-    return scale*torch.from_numpy(fts)
+    return scale*torch.from_numpy(fts).float()
 
 def separate_libs(libs):
-    l = {} 
-    for i in range(1,7):
-        l[i] = libs.copy()
+    l = [libs.copy() for _ in range(7)] 
+    for i in range(7):
         a = l[i]
-        a[a != i] = 0
-    l[7] = libs.copy()
-    a = l[7]
+        a[a != i+1] = 0
+    a = l[6]
     a[a<7] = 0
-    return list(l.values())
+    return l 
 
 def policy_predict(policy: PolicyNet, game: go.Game , device = "cpu", k=1):
     '''Return top k moves of the distribution'''
     fts = features(game, policy.scale).unsqueeze(0).float()
     predicts = torch.topk(F.softmax(policy(fts), dim = 1).squeeze(0), k)
     return predicts 
+
+def policy_sample(policy: PolicyNet, game: go.Game, device = "cpu"):
+    fts = features(game, policy.scale).unsqueeze(0)
+    probs = F.softmax(policy(fts), dim = 1)
+    m = Categorical(probs)
+    return m.sample().item()
 
 
 class Conv2dUntiedBias(nn.Module):

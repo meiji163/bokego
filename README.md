@@ -1,8 +1,6 @@
 ## Todo
 
-* Train policy net
-    * Convert to TorchScript
-* Implement MCTS with policy net
-* Self-play training
-* ??? 
-* Profit.
+* RL policy net
+* SL value net
+* Port to C++
+* Implement MCTS 

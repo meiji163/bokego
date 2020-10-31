@@ -40,6 +40,7 @@ if __name__ == "__main__":
         epochs_trained = 0 
 
     epochs = args.e[0] 
+
     for epoch in range(epochs):
         epochs_trained += 1
         print("Epoch: {}".format(epochs_trained + epoch))
@@ -61,5 +62,7 @@ if __name__ == "__main__":
                 print(" Loss: ", running_loss)
                 running_loss = 0.0
             if i%30000 == 11440: 
-                out_path = r"/home/jupyter/BokeGo/policy_net_py/" + "policy_v0.5_" + str(date.today()) + "_" + str(epochs_trained)+ ".pt"  
+                out_path = r"/home/jupyter/BokeGo/policy_net_py/" + "policy_v0.5_" \
+                        + str(date.today()) + "_" + str(epochs_trained)+ ".pt"  
                 torch.save({"model_state_dict": pi.state_dict(), "optimizer_state_dict": optimizer.state_dict(), "epoch": epochs_trained}, out_path)
+
