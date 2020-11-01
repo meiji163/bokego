@@ -46,10 +46,6 @@ class MCTS:
                 if not outgoing:
                     path = self._select(node)
                     outgoing.append(path)
-                
-                if len(ongoing) >= n_workers:
-                    # Too many playouts running? Wait a bit...
-                    ongoing[0][0].wait(0.01 / n_workers)
                 else:
                     i += 1
                     leaf = path[-1]
