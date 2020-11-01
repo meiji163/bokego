@@ -3,10 +3,9 @@ from random import choice, randrange
 
 import torch
 
-from bokePolicy import PolicyNet, policy_predict
+from bokePolicy import PolicyNet, policy_sample
 import go
 from mcts import MCTS, Node
-from selfPlay import sample
 
 MAX_TURNS = 60
 
@@ -85,7 +84,7 @@ class Go_MCTS(go.Game, Node):
 
     def get_move(self):
         if self.policy:
-            return sample(policy=self.policy, game=self) # NEEDS TO BE FIXED
+            return policy_sample(policy=self.policy, game=self) # NEEDS TO BE FIXED
         else:
             move = randrange(0, go.N ** 2)
             while not self.is_legal(move):
@@ -106,8 +105,8 @@ if __name__ == '__main__':
     pi = PolicyNet()
     checkpt = torch.load("v0.5/policy_v0.5_2020-10-29_1.pt", map_location = torch.device("cpu"))
     pi.load_state_dict(checkpt["model_state_dict"])
-    NUMBER_OF_ROLLOUTS = 50
-    tree = MCTS()
+    NUMBER_OF_ROLLOUTS = 500
+    tree = MCTS(exploration_weight=0.5)
     board = Go_MCTS(policy=pi)
     print(board)
     while True:
@@ -133,4 +132,3 @@ if __name__ == '__main__':
         print(board)
         if board.terminal:
             break
-
