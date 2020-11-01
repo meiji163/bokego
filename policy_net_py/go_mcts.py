@@ -8,6 +8,7 @@ import go
 from mcts import MCTS, Node
 from selfPlay import sample
 
+MAX_TURNS = 60
 
 class Go_MCTS(go.Game, Node):
     """Wraps go.Game to turn it into a Node for search tree expansion
@@ -30,8 +31,8 @@ class Go_MCTS(go.Game, Node):
         self.terminal = terminal
         self.color = color
 
-    def __eq__(node1, node2):
-        return node1.board == node2.board
+    def __eq__(self, node2):
+        return self.board == node2.board
 
     def __hash__(self):
         return self.board.__hash__()
@@ -72,7 +73,7 @@ class Go_MCTS(go.Game, Node):
         # It's now the other player's turn
         game_copy.color = not self.color
         # Check if the move ended the game
-        game_copy.terminal = game_copy.is_game_over()
+        game_copy.terminal = game_copy.turn > MAX_TURNS
         return game_copy
 
     def is_terminal(self):
@@ -91,6 +92,7 @@ class Go_MCTS(go.Game, Node):
                 move = randrange(0, go.N ** 2)
             return move 
 
+    # Do not use until we figure out how to best terminate the game
     def is_game_over(self):
         '''Game is over if there are no more legal moves
         (or if both players pass consecutively, or if a
@@ -112,11 +114,15 @@ if __name__ == '__main__':
         while True:
             try:
                 row_col = input("enter 'row col': ")
+                if row_col == 'q':
+                    break
                 index = go.squash(tuple([int(i) for i in row_col.split(' ') ]))
                 if board.is_legal(index):
                     break
             except:
-                print("Enter a valid option")
+                print("Enter a valid option, or type 'q' to quit")
+        if row_col == 'q':
+            break
         board = board.make_move(index)
         print(board)
         if board.terminal:
@@ -127,3 +133,4 @@ if __name__ == '__main__':
         print(board)
         if board.terminal:
             break
+
