@@ -64,7 +64,7 @@ class MCTS:
 
     def _simulate(self, node):
         "Returns the reward for a random simulation (to completion) of `node`"
-        invert_reward = True
+        invert_reward = False
         while True:
             if node.is_terminal():
                 reward = node.reward()
