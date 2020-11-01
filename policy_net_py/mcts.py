@@ -1,8 +1,6 @@
 """
 A minimal implementation of Monte Carlo tree search (MCTS) in Python 3
-Luke Harold Miles, July 2019, Public Domain Dedication
-See also https://en.wikipedia.org/wiki/Monte_Carlo_tree_search
-https://gist.github.com/qpwo/c538c6f73727e254fdc7fab81024f6e1
+Kyle Chan, 2020. Copyright Lobachevsky Inc.
 """
 from abc import ABC, abstractmethod
 from collections import defaultdict
@@ -64,11 +62,15 @@ class MCTS:
 
     def _simulate(self, node):
         "Returns the reward for a random simulation (to completion) of `node`"
-        invert_reward = False
+        invert_reward = True 
         while True:
             if node.is_terminal():
                 reward = node.reward()
-                return 1 - reward if invert_reward else reward
+                reward = invert_reward^reward 
+                print(node)
+                print(reward)
+                print(node.score())
+                return reward
             node = node.find_random_child()
             invert_reward = not invert_reward
 

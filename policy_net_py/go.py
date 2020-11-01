@@ -101,7 +101,7 @@ class Game():
                 border_color = WHITE
             board = bulk_place_stones(border_color, board, borders)
             board = bulk_place_stones(border_color, board, empties)
-        return board.count(BLACK), board.count(WHITE) + komi
+        return board.count(BLACK) - (board.count(WHITE) + komi)
 
     def get_liberties(self):
         board = self.board

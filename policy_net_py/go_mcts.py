@@ -1,13 +1,13 @@
-from copy import copy
+import copy
 from random import choice, randrange
-
+import time
 import torch
 
 from bokePolicy import PolicyNet, policy_sample
 import go
 from mcts import MCTS, Node
 
-MAX_TURNS = 60
+MAX_TURNS = 120 
 
 class Go_MCTS(go.Game, Node):
     """Wraps go.Game to turn it into a Node for search tree expansion
@@ -27,11 +27,11 @@ class Go_MCTS(go.Game, Node):
                  color=True):
         super().__init__(board, ko, turn, moves, sgf)
         self.policy = policy
-        self.terminal = terminal
+        self.terminal = terminal 
         self.color = color
 
-    def __eq__(self, node2):
-        return self.board == node2.board
+    def __eq__(self, other):
+        return self.board == other.board
 
     def __hash__(self):
         return self.board.__hash__()
@@ -55,24 +55,24 @@ class Go_MCTS(go.Game, Node):
         been played.'''
         if self.terminal:
             return self # Game is over; no moves can be made
-        return self.make_move(self.get_move())
+        return self.make_move(self.get_move()) 
 
     def reward(self):
         '''Returns 1 for a win, 0 for a loss.'''
         if not self.terminal:
             raise RuntimeError(f"reward called on nonterminal board {self}")
         # Black = True, White = False
-        return int(self.color and self.current_winner())
+        return int(self.current_winner())
 
     def make_move(self, index):
         '''Returns a copy of the board (Go_MCTS object) after the move
         given by index has been played.'''
-        game_copy = copy(self)
+        game_copy = copy.copy(self)
         game_copy.play_move(index)
+        game_copy.terminal = game_copy.is_game_over()
         # It's now the other player's turn
         game_copy.color = not self.color
         # Check if the move ended the game
-        game_copy.terminal = game_copy.turn > MAX_TURNS
         return game_copy
 
     def is_terminal(self):
@@ -83,8 +83,14 @@ class Go_MCTS(go.Game, Node):
         return [i for i in range(go.N ** 2) if self.is_legal(i)]
 
     def get_move(self):
-        if self.policy:
-            return policy_sample(policy=self.policy, game=self) # NEEDS TO BE FIXED
+        if self.policy: 
+            move = policy_sample(policy = self.policy, game = self)
+            tries = 0
+            while not self.is_legal(move):
+                move = policy_sample(policy = self.policy, game = self)
+                if tries > 100:
+                    return
+            return move
         else:
             move = randrange(0, go.N ** 2)
             while not self.is_legal(move):
@@ -96,17 +102,25 @@ class Go_MCTS(go.Game, Node):
         '''Game is over if there are no more legal moves
         (or if both players pass consecutively, or if a
         player resigns...)'''
-        return len(self.get_all_legal_moves()) == 0
+        return (self.turn > 60 or self.get_move == None)
 
     def current_winner(self):
         return self.score() > 0
+
+def play_move_in_tree(tree, move, board): 
+    new_board = board.make_move(move)
+    if board in tree.children:
+        tree.children[board].add(new_board)
+    else:
+        tree.children[new_board] = {board}
+    return new_board
 
 if __name__ == '__main__':
     pi = PolicyNet()
     checkpt = torch.load("v0.5/policy_v0.5_2020-10-29_1.pt", map_location = torch.device("cpu"))
     pi.load_state_dict(checkpt["model_state_dict"])
-    NUMBER_OF_ROLLOUTS = 500
-    tree = MCTS(exploration_weight=0.5)
+    NUMBER_OF_ROLLOUTS = 100
+    tree = MCTS(exploration_weight = 1)
     board = Go_MCTS(policy=pi)
     print(board)
     while True:
@@ -126,9 +140,15 @@ if __name__ == '__main__':
         print(board)
         if board.terminal:
             break
-        for _ in range(NUMBER_OF_ROLLOUTS):
-            tree.do_rollout(board)
-        board = tree.choose(board)
+        if board.turn < 20:
+            time.sleep(1)
+            move = policy_sample(pi, board)
+            board = board.make_move(move)
+        else:
+            for _ in range(NUMBER_OF_ROLLOUTS):
+                tree.do_rollout(board)
+            board = tree.choose(board)
+
         print(board)
         if board.terminal:
             break

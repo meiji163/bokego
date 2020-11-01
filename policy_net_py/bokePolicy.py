@@ -64,7 +64,7 @@ class NinebyNineGames(Dataset):
         g = go.Game(board = board, turn = turn, ko = ko)
         return features(g, scale = self.scale), move
 
-def features(game: go.Game, scale = 1):
+def features(game: go.Game, scale = 1.0):
     ''' go.Game --> (19,9,9) torch.Tensor
         layer: feature
         0: player stones
