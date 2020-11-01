@@ -5,7 +5,10 @@ Kyle Chan, 2020. Copyright Lobachevsky Inc.
 from abc import ABC, abstractmethod
 from collections import defaultdict
 import math
+import multiprocessing
+from multiprocessing.pool import Pool
 
+EXPAND_THRESH = 10
 
 class MCTS:
     "Monte Carlo tree searcher. First rollout the tree then choose a move."
@@ -31,13 +34,48 @@ class MCTS:
 
         return max(self.children[node], key=score)
 
-    def do_rollout(self, node):
-        "Make the tree one layer better. (Train for one iteration.)"
-        path = self._select(node)
-        leaf = path[-1]
-        self._expand(leaf)
-        reward = self._simulate(leaf)
-        self._backpropagate(path, reward)
+    def do_rollout(self, node, n):
+        "Train for n iterations"
+        n_workers = multiprocessing.cpu_count()
+        outgoing = []  # positions waiting for a playout
+        incoming = []  # positions that finished evaluation
+        ongoing = []  # currently ongoing playout jobs
+        i = 0
+        with Pool(processes=n_workers) as pool:
+            while i < n:
+                if not outgoing:
+                    path = self._select(node)
+                    outgoing.append(path)
+                
+                if len(ongoing) >= n_workers:
+                    # Too many playouts running? Wait a bit...
+                    ongoing[0][0].wait(0.01 / n_workers)
+                else:
+                    i += 1
+                    leaf = path[-1]
+                    # Heuristic: only expand leaf if it's promising (i.e. visited a lot).
+                    if self.N[leaf] > EXPAND_THRESH:
+                        self._expand(leaf)
+                    # Issue a self._simulate job to the worker pool
+                    path = outgoing.pop()
+                    ongoing.append((pool.apply_async(self._simulate, (leaf,)), path))
+
+                # Anything to store in the tree?  (We do this step out-of-order
+                # picking up data from the previous round so that we don't stall
+                # ready workers while we update the tree.)
+                while incoming:
+                    score, path = incoming.pop()
+                    self._backpropagate(path, score)
+
+                # Any playouts are finished yet?
+                for job, path in ongoing:
+                    if not job.ready():
+                        continue
+                    # Yes! Queue them up for storing in the tree.
+                    score = job.get()
+                    incoming.append((score, path))
+                    ongoing.remove((job, path))
+
 
     def _select(self, node):
         "Find an unexplored descendent of `node`"
@@ -67,9 +105,9 @@ class MCTS:
             if node.is_terminal():
                 reward = node.reward()
                 reward = invert_reward^reward 
-                print(node)
-                print(reward)
-                print(node.score())
+                # print(node)
+                # print(reward)
+                # print(node.score())
                 return reward
             node = node.find_random_child()
             invert_reward = not invert_reward
