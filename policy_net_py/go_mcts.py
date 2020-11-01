@@ -140,13 +140,12 @@ if __name__ == '__main__':
         print(board)
         if board.terminal:
             break
-        if board.turn < 20:
+        if board.turn < 0:
             time.sleep(1)
             move = policy_sample(pi, board)
             board = board.make_move(move)
         else:
-            for _ in range(NUMBER_OF_ROLLOUTS):
-                tree.do_rollout(board)
+            tree.do_rollout(board, NUMBER_OF_ROLLOUTS)
             board = tree.choose(board)
 
         print(board)
