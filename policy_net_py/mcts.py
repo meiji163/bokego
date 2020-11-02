@@ -47,6 +47,7 @@ class MCTS:
                     self._backpropagate(path, score)
                 i += n_workers
 
+
     def _select(self, node):
         "Find an unexplored descendent of `node`"
         path = []
