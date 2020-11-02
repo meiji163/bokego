@@ -1,31 +1,37 @@
 import go
-from bokePolicy import *
-import numpy as np
+import os
+from bokePolicy import PolicyNet 
+from go_mcts import *
+from mcts import MCTS, Node
+from threading import Thread
 import torch
-import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
 import argparse
 from time import sleep
 
+parser = argparse.ArgumentParser(description = "Play against Boke Go")
+parser.add_argument("--path", metavar="MODEL", type = str, nargs = 1, help = "path to model", default = "v0.5/RL_policy_3.pt")
+parser.add_argument("--color", metavar = "COLOR", type = str, nargs = 1, choices = ['W','B'], default = 'W', help = "Boke's color")
+parser.add_argument("--selfplay", action = 'store_true', dest = 'selfplay', help = 'self play', default = False)
+args = parser.parse_args()
+
+def get_input(in_ref):
+    in_ref[0] = input("Your Move: ")
+
+def clear():
+    os.system('cls' if os.name == 'nt' else 'clear')
+
 if  __name__ == "__main__":
-    parser = argparse.ArgumentParser(description = "Boke Policy Prediction")
-    parser.add_argument("path", metavar="MODEL", type = str, nargs = 1, help = "path to model")
-    parser.add_argument("--sgf", metavar="SGF", type = str, nargs = 1, help = "path to sgf")
-    parser.add_argument("--selfplay", action = 'store_true', dest = 'selfplay', help = 'self play')
-    parser.set_defaults(selfplay = False)
-    args = parser.parse_args()
    
+    NUM_ROLLOUTS = 100
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     pi = PolicyNet()
-    checkpt = torch.load(args.path[0], map_location = device)
+    checkpt = torch.load(args.path, map_location = device)
     pi.load_state_dict(checkpt["model_state_dict"])
     pi.eval()
-    
-    if args.sgf:
-        g = go.Game(sgf = args.sgf[0])
-    else:
-        g = go.Game()
+    board = Go_MCTS(policy = pi)
+    tree = MCTS(exploration_weight = 1)
+
     
     if args.selfplay:
         for _ in range(40):
@@ -33,35 +39,40 @@ if  __name__ == "__main__":
             g.play_move(policy_sample(pi, g))
             sleep(1)
 
+
+    if args.color == 'B' and board.turn == 0:
+        tree.do_rollout(board,NUM_ROLLOUTS)
+        board = tree.choose(board)
+    
+    in_ref = [None]
     while(True):
-        print(g)
-        if args.sgf:
-            uin = input("   \t- press n to see next move in sgf\n\
-        - press p to show prediction\n\
-        - press q to quit\n")
-        else:
-            uin = input("\t Enter Move: ")
-        if args.sgf and uin == 'n':
-            g.play_move()
-        elif uin == 'p':
+        clear()
+        print(board)
+
+        #thread waiting for opponent's move
+        thread = Thread(target=get_input, args = (in_ref,))
+        thread.start()
+
+        #rollouts while waiting
+        while in_ref[0] == None:
+            tree.do_rollout(board)
+        
+        uin = in_ref[0]
+        if uin == 'p':
             probs, moves = policy_predict(pi, g, device, k = 5)
             print(go.unsquash(moves.tolist()))   
             print(probs.tolist())
         elif uin == 'q':
             break
-        elif uin == 'u':
-            g.undo(2)
         else:
             try:
-                g.play_move(go.squash(tuple([int(i) for i in uin.split(' ') ])) )
-                mv = policy_sample(pi,g)
-                while not g.is_legal(mv):
-                    mv = policy_sample(pi,g)
-                print(g)
-                sleep(1)
-                g.play_move(policy_sample(pi, g))
-            except:
-                print("\t - Enter coordinate \"x y\" to play a move\n\
-                - Press p to show prediction\n\
-                - Press q to quit" )
+                sq_c = 9*(ord(uin[0])-65) + int(uin[1]) - 1
+                board = board.make_move(sq_c)
+                clear()
+                print(board)
+                tree.do_rollout(board,NUM_ROLLOUTS)
+                board = tree.choose(board)
+            except: 
+                print("Enter coordinate (e.g. D5) to play a move\nPress p to show policy prediction\nPress q to quit" )
 
+        in_ref[0] = None
