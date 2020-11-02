@@ -44,6 +44,7 @@ class Game():
                 return
             sq_c = self.moves[self.turn]
         
+        
         if sq_c == self.ko:
             raise IllegalMove(f"\n{self}\n Move at {sq_c} illegally retakes ko.")
         if self.board[sq_c] != EMPTY:
@@ -78,6 +79,7 @@ class Game():
 
         if not testing: 
             self.board = new_board
+            self.moves.append(sq_c)
             self.ko = new_ko
             self.turn += 1 
 
