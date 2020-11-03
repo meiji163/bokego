@@ -36,17 +36,11 @@ class MCTS:
 
     def do_rollout(self, node, n):
         "Train for n iterations"
-        n_workers = multiprocessing.cpu_count()
-        i = 0
-        with Pool(processes=n_workers) as pool:
-            while i < n:
-                paths = [self._select(node) for _ in range(n_workers)]
-                leaves = [path[-1] for path in paths]
-                scores = pool.map(self._simulate, leaves)
-                for path, score in zip(paths, scores):
-                    self._backpropagate(path, score)
-                i += n_workers
-
+        for _ in range(n):
+            path = self._select(node)
+            leaf = path[-1]
+            score = self._simulate(leaf)
+            self._backpropagate(path, score)
 
     def _select(self, node):
         "Find an unexplored descendent of `node`"
@@ -71,17 +65,18 @@ class MCTS:
 
     def _simulate(self, node):
         "Returns the reward for a random simulation (to completion) of `node`"
-        invert_reward = True 
+        invert_reward = not node.color
         while True:
             if node.is_terminal():
                 reward = node.reward()
-                reward = invert_reward^reward 
-                # print(node)
-                # print(reward)
-                # print(node.score())
+                reward = invert_reward^reward
+                # for debugging
+                if node.score() > 0:
+                    print('B')
+                else:
+                    print('W')
                 return reward
             node = node.find_random_child()
-            invert_reward = not invert_reward
 
     def _backpropagate(self, path, reward):
         "Send the reward back up to the ancestors of the leaf"
@@ -89,6 +84,8 @@ class MCTS:
             self.N[node] += 1
             self.Q[node] += reward
             reward = 1 - reward  # 1 for me is 0 for my enemy, and vice versa
+        # for debugging
+        print(1 - reward)
 
     def _uct_select(self, node):
         "Select a child of node, balancing exploration & exploitation"

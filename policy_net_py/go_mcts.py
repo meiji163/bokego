@@ -58,11 +58,8 @@ class Go_MCTS(go.Game, Node):
         return self.make_move(self.get_move()) 
 
     def reward(self):
-        '''Returns 1 for a win, 0 for a loss.'''
-        if not self.terminal:
-            raise RuntimeError(f"reward called on nonterminal board {self}")
-        # Black = True, White = False
-        return int(self.current_winner())
+        '''Returns 1 if Black wins, 0 if White wins.'''
+        return int(self.score() > 0)
 
     def make_move(self, index):
         '''Returns a copy of the board (Go_MCTS object) after the move
@@ -103,9 +100,6 @@ class Go_MCTS(go.Game, Node):
         (or if both players pass consecutively, or if a
         player resigns...)'''
         return (self.turn > 60 or self.get_move == None)
-
-    def current_winner(self):
-        return self.score() > 0
 
 def play_move_in_tree(tree, move, board): 
     new_board = board.make_move(move)
