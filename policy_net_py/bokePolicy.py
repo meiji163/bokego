@@ -122,6 +122,13 @@ def policy_sample(policy: PolicyNet, game: go.Game, device = "cpu"):
     m = Categorical(probs)
     return m.sample().item()
 
+def policy_move_prob(policy: PolicyNet, game: go.Game, device = "cpu", move = None):
+    if not move:
+        return 0.
+    fts = features(game, policy.scale).unsqueeze(0)
+    probs = F.softmax(policy(fts), dim = 1)
+    m = Categorical(probs)
+    return m.probs[0][move]
 
 class Conv2dUntiedBias(nn.Module):
     def __init__(self, height, width, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1):

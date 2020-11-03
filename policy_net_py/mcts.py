@@ -30,34 +30,35 @@ class MCTS:
         def score(n):
             if self.N[n] == 0:
                 return float("-inf")  # avoid unseen moves
-            return self.Q[n] / self.N[n]  # average reward
+            return self.N[n]
 
+        # Choose most visited node
         return max(self.children[node], key=score)
 
     def do_rollout(self, node, n):
         "Train for n iterations"
-        for _ in range(n):
-            path = self._select(node)
+        for i in range(n):
+            # Get path to leaf of current search tree
+            path = self._descend(node, i + 1)
             leaf = path[-1]
-            if self.N[leaf] > EXPAND_THRESH:
-                self._expand(leaf)
+            # Get result of rollout starting from leaf
             score = self._simulate(leaf)
             self._backpropagate(path, score)
 
-    def _select(self, node):
-        "Find an unexplored descendent of `node`"
-        path = []
+    def _descend(self, node, total_visits):
+        "Return a path from root down to leaf via PUCT selection"
+        # Start at root (current position)
+        path = [node]
         while True:
-            path.append(node)
+            # Is node a leaf?
             if node not in self.children or not self.children[node]:
-                # node is either unexplored or terminal
+                # Heuristic: if node is "promising" (i.e. large # of visits),
+                # expand search tree to include node's children
+                if self.N[node] > EXPAND_THRESH:
+                    self._expand(node)
                 return path
-            unexplored = self.children[node] - self.children.keys()
-            if unexplored:
-                n = unexplored.pop()
-                path.append(n)
-                return path
-            node = self._uct_select(node)  # descend a layer deeper
+            node = self._puct_select(node, total_visits)  # descend a layer deeper
+            path.append(node)
 
     def _expand(self, node):
         "Update the `children` dict with the children of `node`"
@@ -65,6 +66,7 @@ class MCTS:
             return  # already expanded
         self.children[node] = node.find_children()
 
+    # Need to make this faster (ideally at least 10x)
     def _simulate(self, node):
         "Returns the reward for a random simulation (to completion) of `node`"
         invert_reward = not node.color
@@ -72,11 +74,6 @@ class MCTS:
             if node.is_terminal():
                 reward = node.reward()
                 reward = invert_reward^reward
-                # for debugging
-                if node.score() > 0:
-                    print('B')
-                else:
-                    print('W')
                 return reward
             node = node.find_random_child()
 
@@ -85,25 +82,20 @@ class MCTS:
         for node in reversed(path):
             self.N[node] += 1
             self.Q[node] += reward
-            reward = 1 - reward  # 1 for me is 0 for my enemy, and vice versa
-        # for debugging
-        print(1 - reward)
+            reward = 1 - reward
 
-    def _uct_select(self, node):
-        "Select a child of node, balancing exploration & exploitation"
+    # Works but is slow af; need to make this 100x faster
+    def _puct_select(self, node, total_visits):
+        "Select a child of node with PUCT"
 
-        # All children of node should already be expanded:
-        assert all(n in self.children for n in self.children[node])
+        # Predictor + UCT (PUCT) variant used in AlphaGo
+        def puct(n):
+            avg_reward = 0 if self.N[n] == 0 else self.Q[n] / self.N[n]
+            return avg_reward + (self.exploration_weight
+                    * n.get_move_prob(n.last_move)
+                    * math.sqrt(total_visits) / (1 + self.N[n]))
 
-        log_N_vertex = math.log(self.N[node])
-
-        def uct(n):
-            "Upper confidence bound for trees"
-            return self.Q[n] / self.N[n] + self.exploration_weight * math.sqrt(
-                log_N_vertex / self.N[n]
-            )
-
-        return max(self.children[node], key=uct)
+        return max(self.children[node], key=puct)
 
 
 class Node(ABC):
@@ -139,6 +131,6 @@ class Node(ABC):
         return 123456789
 
     @abstractmethod
-    def __eq__(node1, node2):
+    def __eq__(self, other):
         "Nodes must be comparable"
         return True
