@@ -139,9 +139,8 @@ if __name__ == '__main__':
         print(board)
         if board.terminal:
             break
-        else:
-            tree.do_rollout(board, NUMBER_OF_ROLLOUTS)
-            board = tree.choose(board)
+        tree.do_rollout(board, NUMBER_OF_ROLLOUTS)
+        board = tree.choose(board)
 
         print(board)
         if board.terminal:
