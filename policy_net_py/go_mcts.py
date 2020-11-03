@@ -98,7 +98,6 @@ class Go_MCTS(go.Game, Node):
                 move = randrange(0, go.N ** 2)
             return move 
 
-    # Do not use until we figure out how to best terminate the game
     def is_game_over(self):
         '''Terminate after MAX_TURNS or if policy wants to play an illegal move'''
         return (self.turn > MAX_TURNS or self.get_move == None)
@@ -106,21 +105,17 @@ class Go_MCTS(go.Game, Node):
     def get_move_prob(self, move):
         return policy_move_prob(policy = self.policy, game = self, move = move)
 
-def play_move_in_tree(tree, move, board): 
-    new_board = board.make_move(move)
-    if board in tree.children:
-        tree.children[board].add(new_board)
-    else:
-        tree.children[new_board] = {board}
-    return new_board
 
 if __name__ == '__main__':
+
     pi = PolicyNet()
     checkpt = torch.load("v0.5/RL_policy_3.pt", map_location = torch.device("cpu"))
     pi.load_state_dict(checkpt["model_state_dict"])
     NUMBER_OF_ROLLOUTS = 100
     tree = MCTS(exploration_weight = 0.5)
     board = Go_MCTS(policy=pi)
+
+    
     print(board)
     while True:
         while True:

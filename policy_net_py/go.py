@@ -2,7 +2,7 @@ import re
 import itertools
 from textwrap import wrap
 N = 9 
-WHITE, BLACK, EMPTY = 'o', '*', '.'
+WHITE, BLACK, EMPTY = 'O', 'X', '.'
 EMPTY_BOARD = EMPTY*(N**2) 
 
 class Game():
@@ -27,8 +27,8 @@ class Game():
 
 
     def __str__(self):
-        return "\t  " +' '.join([str(i) for i in range(N)]) +"\n" \
-            + '\n'.join(['\t'+str(i)+' '+ ' '.join( self.board[N*i:N*(i+1)]) for i in range(N)])
+        return "\t  " +' '.join([str(i+1) for i in range(N)]) +"\n" \
+            + '\n'.join(['\t'+chr(i + 65)+' '+ ' '.join( self.board[N*i:N*(i+1)]) for i in range(N)])
 
     def __len__(self):
         return len(self.moves)
