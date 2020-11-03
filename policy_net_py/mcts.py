@@ -35,7 +35,7 @@ class MCTS:
         # Choose most visited node
         return max(self.children[node], key=score)
 
-    def do_rollout(self, node, n=1):
+    def do_rollout(self, node, n):
         "Train for n iterations"
         for i in range(n):
             # Get path to leaf of current search tree
