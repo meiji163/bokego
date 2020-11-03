@@ -3,7 +3,7 @@ from random import choice, randrange
 import time
 import torch
 
-from bokePolicy import PolicyNet, policy_sample, policy_move_prob
+from bokePolicy import PolicyNet, policy_dist
 import go
 from mcts import MCTS, Node
 
@@ -30,12 +30,13 @@ class Go_MCTS(go.Game, Node):
         self.terminal = terminal 
         self.color = color
         self.last_move = last_move
+        self.dist = None
 
     def __eq__(self, other):
         return self.board == other.board
 
     def __hash__(self):
-        return self.board.__hash__()
+        return hash(self.board + str(self.turn) + str(self.ko)) 
 
     def __copy__(self):
         return Go_MCTS(board=self.board, ko=self.ko, turn=self.turn,
@@ -84,12 +85,13 @@ class Go_MCTS(go.Game, Node):
 
     def get_move(self):
         if self.policy: 
-            move = policy_sample(policy = self.policy, game = self)
+            move = self.dist_sample() 
             tries = 0
             while not self.is_legal(move):
-                move = policy_sample(policy = self.policy, game = self)
+                move = self.dist_sample() 
                 tries += 1
-                if tries > 100:
+                #If policy selects illegal move too many times, game is probably over.
+                if tries > 20:
                     return
             return move
         else:
@@ -101,11 +103,17 @@ class Go_MCTS(go.Game, Node):
     # Do not use until we figure out how to best terminate the game
     def is_game_over(self):
         '''Terminate after MAX_TURNS or if policy wants to play an illegal move'''
-        return (self.turn > MAX_TURNS or self.get_move == None)
+        return (self.turn > MAX_TURNS or self.get_move() == None)
 
-    def get_move_prob(self, move):
-        return policy_move_prob(policy = self.policy, game = self, move = move)
-
+    def get_dist(self):
+        '''Get the probability distribution for this board'''
+        self.dist =  policy_dist(self.policy, self)
+    
+    def dist_sample(self):
+        '''Sample a move from the policy distribution'''
+        if self.dist == None:
+            self.get_dist()
+        return self.dist.sample().item()
 
 if __name__ == '__main__':
     pi = PolicyNet()
@@ -118,17 +126,17 @@ if __name__ == '__main__':
     while True:
         while True:
             try:
-                row_col = input("enter 'row col': ")
+                row_col = input("enter move: ")
                 if row_col == 'q':
                     break
-                index = go.squash(tuple([int(i) for i in row_col.split(' ') ]))
-                if board.is_legal(index):
+                sq_c = 9*(ord(row_col[0])-65) + int(row_col[1]) - 1
+                if board.is_legal(sq_c):
                     break
             except:
                 print("Enter a valid option, or type 'q' to quit")
         if row_col == 'q':
             break
-        board = board.make_move(index)
+        board = board.make_move(sq_c)
         print(board)
         if board.terminal:
             break

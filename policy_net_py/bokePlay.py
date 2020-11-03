@@ -12,6 +12,7 @@ parser = argparse.ArgumentParser(description = "Play against Boke Go")
 parser.add_argument("--path", metavar="MODEL", type = str, nargs = 1, help = "path to model", default = "v0.5/RL_policy_3.pt")
 parser.add_argument("--color", metavar = "COLOR", type = str, nargs = 1, choices = ['W','B'], default = 'W', help = "Boke's color")
 parser.add_argument("--selfplay", action = 'store_true', dest = 'selfplay', help = 'self play', default = False)
+parser.add_argument("-r", type = int, nargs = 1, help = "number of rollouts/move", default = 100)
 args = parser.parse_args()
 
 def get_input(in_ref):
@@ -22,8 +23,7 @@ def clear():
 
 if  __name__ == "__main__":
    
-    NUM_ROLLOUTS = 100
-
+    NUM_ROLLOUTS = args.r 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     pi = PolicyNet()
     checkpt = torch.load(args.path, map_location = device)

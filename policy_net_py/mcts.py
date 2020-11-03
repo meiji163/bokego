@@ -35,7 +35,7 @@ class MCTS:
         # Choose most visited node
         return max(self.children[node], key=score)
 
-    def do_rollout(self, node, n):
+    def do_rollout(self, node, n = 1):
         "Train for n iterations"
         for i in range(n):
             # Get path to leaf of current search tree
@@ -84,15 +84,17 @@ class MCTS:
             self.Q[node] += reward
             reward = 1 - reward
 
-    # Works but is slow af; need to make this 100x faster
     def _puct_select(self, node, total_visits):
         "Select a child of node with PUCT"
 
         # Predictor + UCT (PUCT) variant used in AlphaGo
         def puct(n):
+            if n.dist == None:
+                n.get_dist()
+            last_move_prob = n.dist.probs[0][n.last_move].item()
             avg_reward = 0 if self.N[n] == 0 else self.Q[n] / self.N[n]
             return avg_reward + (self.exploration_weight
-                    * n.get_move_prob(n.last_move)
+                    * last_move_prob 
                     * math.sqrt(total_visits) / (1 + self.N[n]))
 
         return max(self.children[node], key=puct)
