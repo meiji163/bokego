@@ -2,11 +2,12 @@ import copy
 from random import choice, randrange
 import time
 import torch
+
 from bokePolicy import PolicyNet, policy_sample
 import go
 from mcts import MCTS, Node
 
-MAX_TURNS = 70 
+MAX_TURNS = 120 
 
 class Go_MCTS(go.Game, Node):
     """Wraps go.Game to turn it into a Node for search tree expansion
@@ -57,11 +58,8 @@ class Go_MCTS(go.Game, Node):
         return self.make_move(self.get_move()) 
 
     def reward(self):
-        '''Returns 1 for a win, 0 for a loss.'''
-        if not self.terminal:
-            raise RuntimeError(f"reward called on nonterminal board {self}")
-        # Black = True, White = False
-        return int(self.current_winner())
+        '''Returns 1 if Black wins, 0 if White wins.'''
+        return int(self.score() > 0)
 
     def make_move(self, index):
         '''Returns a copy of the board (Go_MCTS object) after the move
@@ -96,24 +94,28 @@ class Go_MCTS(go.Game, Node):
                 move = randrange(0, go.N ** 2)
             return move 
 
+    # Do not use until we figure out how to best terminate the game
     def is_game_over(self):
-        '''Terminate after MAX_TURNS or if policy wants to play an illegal move'''
-        return (self.turn > MAX_TURNS or self.get_move == None)
+        '''Game is over if there are no more legal moves
+        (or if both players pass consecutively, or if a
+        player resigns...)'''
+        return (self.turn > 60 or self.get_move == None)
 
-    def current_winner(self):
-        return self.score() > 0
-
+def play_move_in_tree(tree, move, board): 
+    new_board = board.make_move(move)
+    if board in tree.children:
+        tree.children[board].add(new_board)
+    else:
+        tree.children[new_board] = {board}
+    return new_board
 
 if __name__ == '__main__':
-
     pi = PolicyNet()
-    checkpt = torch.load("v0.5/RL_policy_3.pt", map_location = torch.device("cpu"))
+    checkpt = torch.load("v0.5/policy_v0.5_2020-10-29_1.pt", map_location = torch.device("cpu"))
     pi.load_state_dict(checkpt["model_state_dict"])
-    NUMBER_OF_ROLLOUTS = 100 
+    NUMBER_OF_ROLLOUTS = 100
     tree = MCTS(exploration_weight = 1)
     board = Go_MCTS(policy=pi)
-
-    
     print(board)
     while True:
         while True:
@@ -132,6 +134,10 @@ if __name__ == '__main__':
         print(board)
         if board.terminal:
             break
+        if board.turn < 0:
+            time.sleep(1)
+            move = policy_sample(pi, board)
+            board = board.make_move(move)
         else:
             tree.do_rollout(board, NUMBER_OF_ROLLOUTS)
             board = tree.choose(board)
