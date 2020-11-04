@@ -70,10 +70,10 @@ class Go_MCTS(go.Game, Node):
         game_copy = copy.copy(self)
         game_copy.play_move(index)
         game_copy.last_move = index
-        # Check if the move ended the game
-        game_copy.terminal = game_copy.is_game_over()
         # It's now the other player's turn
         game_copy.color = not self.color
+        # Check if the move ended the game
+        game_copy.terminal = game_copy.is_game_over()
         return game_copy
 
     def is_terminal(self):
@@ -105,14 +105,14 @@ class Go_MCTS(go.Game, Node):
         '''Terminate after MAX_TURNS or if policy wants to play an illegal move'''
         return (self.turn > MAX_TURNS or self.get_move() == None)
 
-    def get_dist(self):
-        '''Get the probability distribution for this board'''
-        self.dist =  policy_dist(self.policy, self)
+    def set_dist(self):
+        '''Set the probability distribution for this board'''
+        self.dist = policy_dist(self.policy, self)
     
     def dist_sample(self):
         '''Sample a move from the policy distribution'''
-        if self.dist == None:
-            self.get_dist()
+        if not self.dist:
+            self.set_dist()
         return self.dist.sample().item()
 
 if __name__ == '__main__':
