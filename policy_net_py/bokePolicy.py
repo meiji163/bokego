@@ -110,25 +110,23 @@ def separate_libs(libs):
     a[a<7] = 0
     return l 
 
-def policy_predict(policy: PolicyNet, game: go.Game , device = "cpu", k=1):
-    '''Return top k moves of the distribution'''
+def policy_dist(policy: PolicyNet, game: go.Game , device = "cpu"):
+    '''Return torch.distribution.Categorial distribution over coordinates'''
     fts = features(game, policy.scale).unsqueeze(0).float()
-    predicts = torch.topk(F.softmax(policy(fts), dim = 1).squeeze(0), k)
-    return predicts 
+    probs = F.softmax(policy(fts), dim = 1).squeeze(0)
+    dist = Categorical(probs)
+    return dist
 
+def policy_predict(policy, game, device = "cpu", k = 1):
+    fts = features(game, policy.scale).unsqueeze(0)
+    probs = F.softmax(policy(fts), dim = 1).squeeze(0)
+    return torch.topk(probs, k= k)
 def policy_sample(policy: PolicyNet, game: go.Game, device = "cpu"):
     fts = features(game, policy.scale).unsqueeze(0)
-    probs = F.softmax(policy(fts), dim = 1)
+    probs = F.softmax(policy(fts), dim = 1).squeeze(0)
     m = Categorical(probs)
     return m.sample().item()
 
-def policy_move_prob(policy: PolicyNet, game: go.Game, device = "cpu", move = None):
-    if not move:
-        return 0.
-    fts = features(game, policy.scale).unsqueeze(0)
-    probs = F.softmax(policy(fts), dim = 1)
-    m = Categorical(probs)
-    return m.probs[0][move]
 
 class Conv2dUntiedBias(nn.Module):
     def __init__(self, height, width, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1):

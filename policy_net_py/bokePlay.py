@@ -13,6 +13,7 @@ parser.add_argument("--path", metavar="MODEL", type = str, nargs = 1, help = "pa
 parser.add_argument("--color", metavar = "COLOR", type = str, nargs = 1, choices = ['W','B'], default = 'W', help = "Boke's color")
 parser.add_argument("--selfplay", action = 'store_true', dest = 'selfplay', help = 'self play', default = False)
 parser.add_argument("--rollouts", nargs = 1, type = int, default = 50, help = "number of rollouts per move")
+
 args = parser.parse_args()
 
 def get_input(in_ref):
@@ -25,7 +26,7 @@ if  __name__ == "__main__":
    
     NUM_ROLLOUTS = args.rollouts
     print(NUM_ROLLOUTS)
-
+    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     pi = PolicyNet()
     checkpt = torch.load(args.path, map_location = device)
