@@ -85,6 +85,9 @@ class MCTS:
 
         # Predictor + UCT (PUCT) variant used in AlphaGo
         total_visits = sum(self.N[n] for n in self.children[node])
+        # First visit selects policy's top choice
+        if total_visits == 0:
+            total_visits = 1
         if not node.dist:
             node.set_dist()
         def puct(n):
