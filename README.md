@@ -23,4 +23,4 @@ optional arguments:
   --selfplay   self play
   -r ROLLOUTS  number of rollouts per moveusage: bokePlay.py [-h] [-p MODEL] [-c COLOR] [--selfplay] [-r ROLLOUTS]
 ```
-*Warning* rollouts are currently single-threaded and very slow. 
+**Warning**: rollouts are currently single-threaded and very slow. 
