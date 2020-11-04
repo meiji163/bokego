@@ -3,7 +3,7 @@ from random import choice, randrange
 import time
 import torch
 
-from bokePolicy import PolicyNet, policy_dist, policy_predict
+from bokePolicy import PolicyNet, policy_dist
 import go
 from mcts import MCTS, Node
 
@@ -49,8 +49,7 @@ class Go_MCTS(go.Game, Node):
         moves'''
         if self.terminal:
             return set()      
-        topk = policy_predict(self.policy, self, k = 10).indices.tolist()
-        return {self.make_move(i) for i in topk if self.is_legal(i)} 
+        return {self.make_move(i) for i in self.get_all_legal_moves()}
     
     def find_random_child(self):
         '''Draws legal move from distribution given by policy. If no
@@ -71,10 +70,10 @@ class Go_MCTS(go.Game, Node):
         game_copy = copy.copy(self)
         game_copy.play_move(index)
         game_copy.last_move = index
-        # Check if the move ended the game
-        game_copy.terminal = game_copy.is_game_over()
         # It's now the other player's turn
         game_copy.color = not self.color
+        # Check if the move ended the game
+        game_copy.terminal = game_copy.is_game_over()
         return game_copy
 
     def is_terminal(self):
@@ -86,7 +85,7 @@ class Go_MCTS(go.Game, Node):
 
     def get_move(self):
         if self.policy: 
-            move = self.dist_sample() 
+            move = self.dist_sample()
             while not self.is_legal(move):
                 move = self.dist_sample() 
             return move
@@ -99,16 +98,16 @@ class Go_MCTS(go.Game, Node):
     # Do not use until we figure out how to best terminate the game
     def is_game_over(self):
         '''Terminate after MAX_TURNS or if policy wants to play an illegal move'''
-        return self.turn > MAX_TURNS 
+        return self.turn > MAX_TURNS
 
-    def get_dist(self):
-        '''Get the probability distribution for this board'''
-        self.dist =  policy_dist(self.policy, self)
+    def set_dist(self):
+        '''Set the probability distribution for this board'''
+        self.dist = policy_dist(self.policy, self)
     
     def dist_sample(self):
         '''Sample a move from the policy distribution'''
-        if self.dist == None:
-            self.get_dist()
+        if not self.dist:
+            self.set_dist()
         return self.dist.sample().item()
 
 if __name__ == '__main__':
@@ -116,7 +115,7 @@ if __name__ == '__main__':
     checkpt = torch.load("v0.5/RL_policy_3.pt", map_location = torch.device("cpu"))
     pi.load_state_dict(checkpt["model_state_dict"])
     NUMBER_OF_ROLLOUTS = 100
-    tree = MCTS(exploration_weight = 0.5)
+    tree = MCTS(exploration_weight = 1)
     board = Go_MCTS(policy=pi)
     print(board)
     while True:
@@ -125,9 +124,8 @@ if __name__ == '__main__':
                 row_col = input("enter move: ")
                 if row_col == 'q':
                     break
-
-                index = 9*(ord(row_col[0]) - 65) + int(row_col[1]) -1
-                if board.is_legal(index):
+                sq_c = 9*(ord(row_col[0])-65) + int(row_col[1]) - 1
+                if board.is_legal(sq_c):
                     break
             except:
                 print("Enter a valid option, or type 'q' to quit")

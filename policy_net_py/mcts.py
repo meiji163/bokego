@@ -33,15 +33,15 @@ class MCTS:
 
     def do_rollout(self, node, n = 1):
         "Train for n iterations"
-        for i in range(n):
+        for _ in range(n):
             # Get path to leaf of current search tree
-            path = self._descend(node, i + 1)
+            path = self._descend(node)
             leaf = path[-1]
             # Get result of rollout starting from leaf
             score = self._simulate(leaf)
             self._backpropagate(path, score)
 
-    def _descend(self, node, total_visits):
+    def _descend(self, node):
         "Return a path from root down to leaf via PUCT selection"
         # Start at root (current position)
         path = [node]
@@ -53,7 +53,7 @@ class MCTS:
                 if self.N[node] > EXPAND_THRESH:
                     self._expand(node)
                 return path
-            node = self._puct_select(node, total_visits)  # descend a layer deeper
+            node = self._puct_select(node)  # descend a layer deeper
             path.append(node)
 
     def _expand(self, node):
@@ -80,19 +80,20 @@ class MCTS:
             self.Q[node] += reward
             reward = 1 - reward
 
-    def _puct_select(self, node, total_visits):
+    def _puct_select(self, node):
         "Select a child of node with PUCT"
 
         # Predictor + UCT (PUCT) variant used in AlphaGo
+        total_visits = sum(self.N[n] for n in self.children[node])
+        if not node.dist:
+            node.set_dist()
         def puct(n):
-            if n.dist == None:
-                n.get_dist()
-            last_move_prob = n.dist.probs[n.last_move].item()
+            last_move_prob = node.dist.probs[n.last_move].item()
             avg_reward = 0 if self.N[n] == 0 else self.Q[n] / self.N[n]
             return avg_reward + (self.exploration_weight
                     * last_move_prob 
                     * math.sqrt(total_visits) / (1 + self.N[n]))
-        
+
         return max(self.children[node], key=puct)
 
 
