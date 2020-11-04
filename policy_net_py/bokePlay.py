@@ -1,18 +1,20 @@
 import go
-import os
-from bokePolicy import PolicyNet 
+from sys import exit, stdout
+from itertools import cycle
+from os import system, name
+from bokePolicy import PolicyNet, policy_predict
 from go_mcts import *
 from mcts import MCTS, Node
 from threading import Thread
-import torch
+from torch import load, device, no_grad 
 import argparse
 from time import sleep
 
-parser = argparse.ArgumentParser(description = "Play against Boke Go")
-parser.add_argument("--path", metavar="MODEL", type = str, nargs = 1, help = "path to model", default = "v0.5/RL_policy_3.pt")
-parser.add_argument("--color", metavar = "COLOR", type = str, nargs = 1, choices = ['W','B'], default = 'W', help = "Boke's color")
+parser = argparse.ArgumentParser(description = "Play against Boke")
+parser.add_argument("-p", metavar="PATH", type = str, dest = 'p', help = "path to model", default = "v0.5/RL_policy_3.pt")
+parser.add_argument("-c", type = str, action = 'store', choices = ['W','B'], dest = 'c', help = "Boke's color", default = 'W')
 parser.add_argument("--selfplay", action = 'store_true', dest = 'selfplay', help = 'self play', default = False)
-parser.add_argument("--rollouts", nargs = 1, type = int, default = 50, help = "number of rollouts per move")
+parser.add_argument("-r", nargs = 1, metavar="ROLLOUTS", action = 'store', type = int, default = 25, dest = 'r', help = "number of rollouts per move")
 
 args = parser.parse_args()
 
@@ -20,31 +22,38 @@ def get_input(in_ref):
     in_ref[0] = input("Your Move: ")
 
 def clear():
-    os.system('cls' if os.name == 'nt' else 'clear')
+    system('cls' if name == 'nt' else 'clear')
+
+done = False #toggle thinking
+def loading():
+    for c in cycle(['|', '/', '-', '\\']):
+        if done:
+            break
+        stdout.write('\rThinking ' + c)
+        stdout.flush()
+        sleep(0.1)
 
 if  __name__ == "__main__":
-   
-    NUM_ROLLOUTS = args.rollouts
-    print(NUM_ROLLOUTS)
-    
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    NUM_ROLLOUTS = args.r[0]
+    device = device("cuda" if torch.cuda.is_available() else "cpu")
     pi = PolicyNet()
-    checkpt = torch.load(args.path, map_location = device)
+    checkpt = load(args.p, map_location = device)
     pi.load_state_dict(checkpt["model_state_dict"])
     pi.eval()
     board = Go_MCTS(policy = pi)
-    tree = MCTS(exploration_weight = 1)
+    tree = MCTS(exploration_weight = 5)
 
-    with torch.no_grad():
+    with no_grad():
         if args.selfplay:
             for _ in range(40):
                 print(g)
                 g.play_move(policy_sample(pi, g))
                 sleep(1)
+            exit()
 
 
-        if args.color == 'B' and board.turn == 0:
-            tree.do_rollout(board,NUM_ROLLOUTS)
+        if args.c == 'B' and board.turn == 0: 
+            tree.do_rollout(board, NUM_ROLLOUTS)
             board = tree.choose(board)
         
         in_ref = [None]
@@ -61,21 +70,27 @@ if  __name__ == "__main__":
                 tree.do_rollout(board)
             
             uin = in_ref[0]
-            if uin == 'p':
-                probs, moves = policy_predict(pi, g, device, k = 5)
-                print(go.unsquash(moves.tolist()))   
-                print(probs.tolist())
+            if uin == 'h':
+                moves = policy_predict(pi, board, device, k = 4).indices.tolist()
+                print("Boke's top moves: " + ','.join([chr(mv//9+65) + str(mv%9) for mv in moves]))
+                sleep(3)
             elif uin == 'q':
-                break
+                exit() 
             else:
                 try:
+                    done = False
                     sq_c = 9*(ord(uin[0])-65) + int(uin[1]) - 1
                     board = board.make_move(sq_c)
                     clear()
                     print(board)
+                    t = Thread(target = loading)
+                    t.start() 
                     tree.do_rollout(board,NUM_ROLLOUTS)
+                    done = True
                     board = tree.choose(board)
                 except: 
-                    print("Enter coordinate (e.g. D5) to play a move\nPress p to show policy prediction\nPress q to quit" )
-
+                    print("Enter coordinate (e.g. D5) to play a move\nEnter h to show hint\nEnter q to quit" )
+                    sleep(3)
+            if board.terminal:
+                exit()
             in_ref[0] = None

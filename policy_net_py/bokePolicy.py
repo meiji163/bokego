@@ -121,6 +121,7 @@ def policy_predict(policy, game, device = "cpu", k = 1):
     fts = features(game, policy.scale).unsqueeze(0)
     probs = F.softmax(policy(fts), dim = 1).squeeze(0)
     return torch.topk(probs, k= k)
+
 def policy_sample(policy: PolicyNet, game: go.Game, device = "cpu"):
     fts = features(game, policy.scale).unsqueeze(0)
     probs = F.softmax(policy(fts), dim = 1).squeeze(0)
