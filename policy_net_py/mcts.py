@@ -91,12 +91,12 @@ class MCTS:
         def puct(n):
             if n.dist == None:
                 n.get_dist()
-            last_move_prob = n.dist.probs[0][n.last_move].item()
+            last_move_prob = n.dist.probs[n.last_move].item()
             avg_reward = 0 if self.N[n] == 0 else self.Q[n] / self.N[n]
             return avg_reward + (self.exploration_weight
                     * last_move_prob 
                     * math.sqrt(total_visits) / (1 + self.N[n]))
-
+        
         return max(self.children[node], key=puct)
 
 

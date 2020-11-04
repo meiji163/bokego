@@ -3,7 +3,7 @@ from random import choice, randrange
 import time
 import torch
 
-from bokePolicy import PolicyNet, policy_dist
+from bokePolicy import PolicyNet, policy_dist, policy_predict
 import go
 from mcts import MCTS, Node
 
@@ -49,7 +49,8 @@ class Go_MCTS(go.Game, Node):
         moves'''
         if self.terminal:
             return set()      
-        return {self.make_move(i) for i in self.get_all_legal_moves()}
+        topk = policy_predict(self.policy, self, k = 10).indices.tolist()
+        return {self.make_move(i) for i in topk if self.is_legal(i)} 
     
     def find_random_child(self):
         '''Draws legal move from distribution given by policy. If no
@@ -86,13 +87,8 @@ class Go_MCTS(go.Game, Node):
     def get_move(self):
         if self.policy: 
             move = self.dist_sample() 
-            tries = 0
             while not self.is_legal(move):
                 move = self.dist_sample() 
-                tries += 1
-                #If policy selects illegal move too many times, game is probably over.
-                if tries > 20:
-                    return
             return move
         else:
             move = randrange(0, go.N ** 2)
@@ -103,7 +99,7 @@ class Go_MCTS(go.Game, Node):
     # Do not use until we figure out how to best terminate the game
     def is_game_over(self):
         '''Terminate after MAX_TURNS or if policy wants to play an illegal move'''
-        return (self.turn > MAX_TURNS or self.get_move() == None)
+        return self.turn > MAX_TURNS 
 
     def get_dist(self):
         '''Get the probability distribution for this board'''
