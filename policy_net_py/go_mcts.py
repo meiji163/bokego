@@ -121,7 +121,7 @@ if __name__ == '__main__':
                 row_col = input("enter 'row col': ")
                 if row_col == 'q':
                     break
-                index = go.squash(tuple([int(i) for i in row_col.split(' ') ]))
+                index = 9*(ord(row_col[0]) - 65) + int(row_col[1]) -1
                 if board.is_legal(index):
                     break
             except:
