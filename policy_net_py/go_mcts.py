@@ -125,8 +125,9 @@ if __name__ == '__main__':
                 row_col = input("enter move: ")
                 if row_col == 'q':
                     break
-                sq_c = 9*(ord(row_col[0])-65) + int(row_col[1]) - 1
-                if board.is_legal(sq_c):
+
+                index = 9*(ord(row_col[0]) - 65) + int(row_col[1]) -1
+                if board.is_legal(index):
                     break
             except:
                 print("Enter a valid option, or type 'q' to quit")

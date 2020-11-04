@@ -1,7 +1,3 @@
-"""
-A minimal implementation of Monte Carlo tree search (MCTS) in Python 3
-Kyle Chan, 2020. Copyright Lobachevsky Inc.
-"""
 from abc import ABC, abstractmethod
 from collections import defaultdict
 import math
