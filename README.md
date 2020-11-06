@@ -4,7 +4,6 @@ Boke is a program that plays 9x9 Go (Baduk) using Monte Carlo Tree Search with a
 ## Todo
 * Add pass/resign
 * Improve rollouts
-* Add GTP io
 * Port to C++
 
 ## Play Boke
