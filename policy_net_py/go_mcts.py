@@ -24,8 +24,8 @@ class Go_MCTS(go.Game, Node):
     """
     def __init__(self, board=go.EMPTY_BOARD, ko=None, turn=0, moves=[],
                  sgf=None, policy: PolicyNet=None, terminal=False,
-                 color=True, last_move=None):
-        super().__init__(board, ko, turn, moves, sgf)
+                 color=True, last_move=None, komi = 5.5):
+        super().__init__(board, ko, turn, moves, sgf, komi)
         self.policy = policy
         self.terminal = terminal 
         self.color = color
@@ -42,7 +42,7 @@ class Go_MCTS(go.Game, Node):
         return Go_MCTS(board=self.board, ko=self.ko, turn=self.turn,
                        moves=self.moves, policy=self.policy,
                        terminal=self.terminal, color=self.color,
-                       last_move=self.last_move)
+                       last_move=self.last_move, komi = self.komi)
     
     def find_children(self):
         '''Returns a set of boards (Go_MCTS objects) derived from legal
@@ -97,7 +97,7 @@ class Go_MCTS(go.Game, Node):
 
     # Do not use until we figure out how to best terminate the game
     def is_game_over(self):
-        '''Terminate after MAX_TURNS or if policy wants to play an illegal move'''
+        '''Terminate after MAX_TURNS''' 
         return self.turn > MAX_TURNS
 
     def set_dist(self):
@@ -110,34 +110,3 @@ class Go_MCTS(go.Game, Node):
             self.set_dist()
         return self.dist.sample().item()
 
-if __name__ == '__main__':
-    pi = PolicyNet()
-    checkpt = torch.load("v0.5/RL_policy_3.pt", map_location = torch.device("cpu"))
-    pi.load_state_dict(checkpt["model_state_dict"])
-    NUMBER_OF_ROLLOUTS = 100
-    tree = MCTS(exploration_weight = 1)
-    board = Go_MCTS(policy=pi)
-    print(board)
-    while True:
-        while True:
-            try:
-                row_col = input("enter move: ")
-                if row_col == 'q':
-                    break
-                sq_c = 9*(ord(row_col[0])-65) + int(row_col[1]) - 1
-                if board.is_legal(sq_c):
-                    break
-            except:
-                print("Enter a valid option, or type 'q' to quit")
-        if row_col == 'q':
-            break
-        board = board.make_move(sq_c)
-        print(board)
-        if board.terminal:
-            break
-        tree.do_rollout(board, NUMBER_OF_ROLLOUTS)
-        board = tree.choose(board)
-
-        print(board)
-        if board.terminal:
-            break

@@ -168,3 +168,4 @@ class Conv2dUntiedBias(nn.Module):
         # add untied bias
         output += self.bias.unsqueeze(0).repeat(input.size(0), 1, 1, 1)
         return output
+

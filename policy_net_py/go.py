@@ -15,10 +15,11 @@ class Game():
         moves: list -- the list of moves played
         sgf: str -- path to an sgf to initialize from
         '''
-    def __init__(self, board = EMPTY_BOARD, ko = None, turn = 0, moves = [], sgf = None):
+    def __init__(self, board = EMPTY_BOARD, ko = None, turn = 0, moves = [], sgf = None, komi = 5.5):
         self.turn = turn
         self.ko = ko
         self.board= board
+        self.komi = komi
         if sgf:
             self.moves = self.get_moves(sgf)
         else:
@@ -27,9 +28,14 @@ class Game():
 
 
     def __str__(self):
-        return "\t  " +' '.join([str(i+1) for i in range(N)]) +"\n" \
-            + '\n'.join(['\t'+chr(i + 65)+' '+ ' '.join( self.board[N*i:N*(i+1)]) for i in range(N)])
-
+        out = self.board
+        if N == 9:
+        #mark flower points
+            for i in [20,24,40,56,60]:
+                if out[i] == EMPTY:
+                    out = place_stone('+', out, i)
+        return "\t  " +' '.join(["ABCDEFGHJKLMNOPQRST"[i] for i in range(N)]) +"\n" \
+            + '\n'.join(['\t'+str(i + 1)+' '+ ' '.join( out[N*i:N*(i+1)]) for i in range(N)])
     def __len__(self):
         return len(self.moves)
 
@@ -90,7 +96,7 @@ class Game():
         except IllegalMove:
             return False
 
-    def score(self, komi = 5.5):
+    def score(self):
         '''Calculated using Chinese rules'''
         board = self.board
         while EMPTY in board:
@@ -103,7 +109,7 @@ class Game():
                 border_color = WHITE
             board = bulk_place_stones(border_color, board, borders)
             board = bulk_place_stones(border_color, board, empties)
-        return board.count(BLACK) - (board.count(WHITE) + komi)
+        return board.count(BLACK) - (board.count(WHITE) + self.komi)
 
     def get_liberties(self):
         board = self.board
@@ -130,15 +136,26 @@ class Game():
                 mvs.append(9*(ord(mv[0])-97) + ord(mv[1])-97 )
         return mvs
 
-#squash converts coordinate pair 0 <= x,y < N  to single integer 0 <= n < N^2
-def squash(c):
+def squash(c, alph = False):
+    '''squash converts coordinate pair to single integer 0 <= n < N^2.
+    alph = True squashes a letter-number coorindate string '''
+    if alph:
+        #Letters skip I
+        y = 8 if c[0] == 'J' else ord(c[0]) - 65 
+        c = ( int(c[1]) - 1,  y)
+        if not ( 0 <= c[0] < N and 0 <= c[1] < N):
+            raise IllegalMove
     return N * c[0] + c[1]
 
-def unsquash(sq_c):
+def unsquash(sq_c, alph = False):
     if type(sq_c) == list:
-        return [divmod(sq_b, N) for sq_b in sq_c]
+        return [divmod(sq_b, N) for sq_b in sq_c ]
     else:
-        return divmod(sq_c, N)
+        c = divmod(sq_c, N)
+        if alph:
+            letr = 'J' if c[1] == 8 else chr(c[1] + 65)
+            return letr + str(c[0] +1)
+        return c
 
 def is_on_board(c):
     return c[0] % N == c[0] and c[1] % N == c[1]
@@ -213,9 +230,9 @@ def play_move_incomplete(board, sq_c, color):
     return board
 
 def possible_ko(board, sq_c):
-    'Check if sq_c is surrounded on all sides by 1 color, and return that color'
+    '''Check if sq_c is surrounded on all sides by 1 color, and return that color'''
     if board[sq_c] != EMPTY: return None
-    neighbor_colors = { board[ sq_n ] for sq_n in NEIGHBORS[sq_c]}
+    neighbor_colors = { board[sq_n] for sq_n in NEIGHBORS[sq_c]}
     if len(neighbor_colors) == 1 and not EMPTY in neighbor_colors:
         return list(neighbor_colors)[0]
     else:
