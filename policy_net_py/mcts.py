@@ -1,8 +1,6 @@
 from abc import ABC, abstractmethod
 from collections import defaultdict
 import math
-import multiprocessing
-from multiprocessing.pool import Pool
 
 EXPAND_THRESH = 10
 

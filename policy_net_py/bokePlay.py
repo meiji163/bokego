@@ -12,7 +12,7 @@ import argparse
 from time import sleep
 
 parser = argparse.ArgumentParser(description = "Play against Boke")
-parser.add_argument("-p", metavar="PATH", type = str, dest = 'p', help = "path to model", default = "v0.5/RL_policy_3.pt")
+parser.add_argument("-p", metavar="PATH", type = str, dest = 'p', help = "path to model", default = "v0.1/RL_policy_3.pt")
 parser.add_argument("-c", type = str, action = 'store', choices = ['W','B'], dest = 'c', help = "Boke's color", default = ['W'])
 parser.add_argument("-r", nargs = 1, metavar="ROLLOUTS", action = 'store', type = int, default = [50], dest = 'r', help = "number of rollouts per move")
 parser.add_argument("--mode", type = str, choices = ["gui","gtp"], default = "gui", help = "Graphical or GTP mode") 
@@ -40,7 +40,7 @@ def gtp(tree, policy):
     commands = ["name","boardsize", "clear_board", "komi", "play", "genmove", "final_score", "quit",\
                 "version", "showboard", "known_command", "protocol_version", "list_commands"]
     board = Go_MCTS(policy = policy)
-    
+    first_pass = False 
     while True:
         try:
             line = input().strip()
@@ -58,7 +58,7 @@ def gtp(tree, policy):
         if cmd[0] not in commands:
             print("?" + cmd_id + "unknown command\n\n", end = '')
         elif cmd[0] == "protocol_version":
-            out = "1"
+            out = "2"
         elif cmd[0] == "version":
             out = "0.1-alpha"
         elif cmd[0] == "known_command":
@@ -79,8 +79,11 @@ def gtp(tree, policy):
             out = ""
         #assume alternating play
         elif cmd[0] == "play":
-            if len(cmd) != 3 or not cmd[1] in ["black", "B", "W", "white"]: 
+            if len(cmd) <2 or not cmd[1] in ["black", "B", "W", "white"]: 
                 print("?{} Invalid color or move\n\n".format(cmd_id), end = '')
+            elif cmd[1] == "PASS":
+                first_pass = True
+                board.turn += 1
             else:
                 turn = 0 if (cmd[1] == "black" or cmd[1] == "B") else 1
                 if turn != board.turn%2: 
@@ -98,6 +101,8 @@ def gtp(tree, policy):
             if len(cmd) != 2 or not cmd[1] in ["black", "B", "W", "white"]: 
                 print("?{} Invalid color\n\n".format(cmd_id), end = '')
             else:
+                if first_pass or board.terminal:
+                    out = "pass"
                 turn = 0 if (cmd[1] == "black" or cmd[1] == "B") else 1
                 if turn != board.turn%2:
                     print("?{} It is {}'s turn\n\n".format(cmd_id, cmd[1]), end='') 

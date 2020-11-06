@@ -1,9 +1,14 @@
 # Boke Go
-Boke is a program that plays 9x9 Go (Baduk) using Monte Carlo Tree Search with a policy network trained on human games. 
+Boke is an open source Go engine for a 9x9 board.
+It uses the PUCT (Prediction + Upper Confidence Bound for Trees)
+variant of Monte Carlo Tree Search. The prediction is provided by a policy network trained on human games.
 
-## Todo
+The current version of Boke won 8/10 games against GnuGo 3.8.
+
+## Todo  
 * Add pass/resign
-* Improve rollouts
+* Add more input features to the policy net
+* Improve rollouts 
 * Port to C++
 
 ## Play Boke
@@ -23,3 +28,8 @@ optional arguments:
   --mode {gui,gtp}  Graphical or GTP mode
 ```
 **Warning**: rollouts are currently single-threaded and very slow. 
+
+GTP mode is supported to play on goban GUIs.
+
+GnuGo (B) vs. Boke (W)
+![boke vs gnugo](https://media.giphy.com/media/T9E8NcDPFe5PAdmyxT/giphy.gif)
