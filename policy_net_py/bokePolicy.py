@@ -61,9 +61,10 @@ class NinebyNineGames(Dataset):
         return len(self.boards)
 
     def __getitem__(self, idx):
-        board, ko, turn, move = self.boards.iloc[idx]
-        ko = (None if ko == "None" else int(ko))
-        g = go.Game(board = board, turn = turn, ko = ko)
+        board, ko, turn, last, move = self.boards.iloc[idx]
+        ko = None if ko == "None" else int(ko)
+        last = None if last == "None" else int (last)
+        g = go.Game(board = board, turn = turn, ko = ko, last_move = last)
         return features(g, scale = self.scale), move
 
 def features(game: go.Game, scale = 1.0):
@@ -111,7 +112,8 @@ def features(game: go.Game, scale = 1.0):
     else:
         turn = np.zeros((9,9), dtype = float)
     last_mv = np.zeros(81, dtype = float)
-    last_mv[game.last_move] = 1
+    if game.last_move:
+        last_mv[game.last_move] = 1
     last_mv = last_mv.reshape(9,9)
     legal = np.array([game.is_legal(sq_c) for sq_c in range(81)], dtype = float) #very slow
     libs = np.array(game.get_liberties(), dtype = float).reshape(9,9)

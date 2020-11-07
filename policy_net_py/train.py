@@ -11,12 +11,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "training script for Boke policy")
     parser.add_argument("-d", metavar="DATA", type = str, nargs=1, help = "path to csv", required = True)
     parser.add_argument("-c", metavar="CHECKPOINT", type = str, nargs = 1, help = "path to saved torch model")
-    parser.add_argument("-e", metavar="EPOCHS", type = int, nargs =1, help = "number of epochs", default = 1)
+    parser.add_argument("-e", metavar="EPOCHS", type = int, nargs =1, help = "number of epochs", default = [1])
     args = parser.parse_args() 
     
     print("Loading data...")
     data = NinebyNineGames(args.d[0], scale = SCALE)
-    dataloader = DataLoader(data, batch_size = 128, shuffle = True, num_workers = 6)
+    dataloader = DataLoader(data, batch_size = 128, shuffle = True, num_workers = 10)
+    validation_set = NinebyNineGames("/home/jupyter/BokeGo/data/validation.csv") 
+    validloader = DataLoader(validation_set, batch_size = 128, shuffle = True, num_workers = 10)
     print("Number of board positions: {}".format(len(data)))
 
     pi = PolicyNet(scale = SCALE)
@@ -61,8 +63,21 @@ if __name__ == "__main__":
             if i%2000 == 1999:
                 print(" Loss: ", running_loss)
                 running_loss = 0.0
-            if i%30000 == 11440: 
-                out_path = r"/home/jupyter/BokeGo/policy_net_py/" + "policy_v0.5_" \
-                        + str(date.today()) + "_" + str(epochs_trained)+ ".pt"  
-                torch.save({"model_state_dict": pi.state_dict(), "optimizer_state_dict": optimizer.state_dict(), "epoch": epochs_trained}, out_path)
+                pi.eval()
+                with torch.no_grad():
+                    valid_loss = 0.0
+                    for j, v_data in enumerate(validloader, 0):
+                        if j == 2000:
+                            break
+                        inputs, moves = v_data
+                        inputs, moves = inputs.to(device), moves.to(device)
+                        outputs = pi(inputs)
+                        loss = err( outputs, moves)
+                        valid_loss += loss
+                    print(" Validation Loss: {}".format(valid_loss))
+                pi.train()
+     
+        out_path = r"/home/jupyter/BokeGo/policy_net_py/" + "policy_v0.2_" \
+                    + str(date.today()) + "_" + str(epochs_trained)+ ".pt"  
+        torch.save({"model_state_dict": pi.state_dict(), "optimizer_state_dict": optimizer.state_dict(), "epoch": epochs_trained}, out_path)
 

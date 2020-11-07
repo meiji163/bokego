@@ -46,7 +46,7 @@ class Game():
     def get_board(self):
         return [self.enc[s] for s in self.board]
 
-    def play_move(self, sq_c = None, testing = False, return_caps = False):
+    def play_move(self, sq_c = None, testing = False):
         '''play move from self.moves. If a coordinate is given that is played instead.
         optional: return a list of captured stones after move is played.'''
         if sq_c == None:
@@ -66,7 +66,7 @@ class Game():
         # Check for suicide
         new_board, captured = maybe_capture_stones(new_board, sq_c)
         if captured:
-            raise IllegalMove(" \n{self}\n Move at {sq_c} is suicide.")
+            raise IllegalMove(f"\n{self}\n Move at {sq_c} is suicide.")
         if testing: return
 
         new_board, opp_captured = get_caps(new_board, sq_c, color)
