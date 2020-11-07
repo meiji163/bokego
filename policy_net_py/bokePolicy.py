@@ -146,12 +146,14 @@ def separate(arr):
 def policy_dist(policy: PolicyNet, game: go.Game , device = "cpu"):
     '''Return torch.distribution.Categorial distribution over coordinates'''
     fts = features(game, policy.scale).unsqueeze(0).float()
+    fts = fts.to(device)
     probs = F.softmax(policy(fts), dim = 1).squeeze(0)
     dist = Categorical(probs)
     return dist
 
 def policy_predict(policy, game, device = "cpu", k = 1):
     fts = features(game, policy.scale).unsqueeze(0)
+    fts = fts.to(device)
     probs = F.softmax(policy(fts), dim = 1).squeeze(0)
     return torch.topk(probs, k= k)
 
@@ -159,9 +161,10 @@ def policy_sample(policy: PolicyNet, game: go.Game, device = "cpu"):
     '''sample a move from policy distribution. Use policy_dist
     for multiple samplings'''
     fts = features(game, policy.scale).unsqueeze(0)
+    fts = fts.to(device)
     probs = F.softmax(policy(fts), dim = 1).squeeze(0)
     m = Categorical(probs)
-    return m.sample().item()
+    return m.sample()
 
 
 class Conv2dUntiedBias(nn.Module):
