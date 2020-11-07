@@ -25,11 +25,10 @@ class Go_MCTS(go.Game, Node):
     def __init__(self, board=go.EMPTY_BOARD, ko=None, turn=0, moves=[],
                  sgf=None, policy: PolicyNet=None, terminal=False,
                  color=True, last_move=None, komi = 5.5):
-        super().__init__(board, ko, turn, moves, sgf, komi)
+        super().__init__(board, ko, last_move, turn, moves, komi, sgf)
         self.policy = policy
         self.terminal = terminal 
         self.color = color
-        self.last_move = last_move
         self.dist = None
 
     def __eq__(self, other):

@@ -15,15 +15,19 @@ class Game():
         moves: list -- the list of moves played
         sgf: str -- path to an sgf to initialize from
         '''
-    def __init__(self, board = EMPTY_BOARD, ko = None, turn = 0, moves = [], sgf = None, komi = 5.5):
+    def __init__(self, board = EMPTY_BOARD, ko = None, last_move = None, turn = 0, \
+            moves = [], komi = 5.5, sgf = None):
         self.turn = turn
         self.ko = ko
         self.board= board
         self.komi = komi
+        self.last_move = last_move
         if sgf:
             self.moves = self.get_moves(sgf)
         else:
             self.moves = moves
+        if self.moves:
+            self.last_move = moves[-1]
         self.enc = {BLACK: 1, WHITE: -1, EMPTY: 0}
 
 
@@ -42,52 +46,40 @@ class Game():
     def get_board(self):
         return [self.enc[s] for s in self.board]
 
-    def play_move(self, sq_c = None, testing = False):
-        '''play move from self.moves. If a coordinate is given that is played instead.'''
+    def play_move(self, sq_c = None, testing = False, return_caps = False):
+        '''play move from self.moves. If a coordinate is given that is played instead.
+        optional: return a list of captured stones after move is played.'''
         if sq_c == None:
             if self.turn >= len(self):
                 print("No more moves to play.")
                 return
             sq_c = self.moves[self.turn]
-        
-        
         if sq_c == self.ko:
             raise IllegalMove(f"\n{self}\n Move at {sq_c} illegally retakes ko.")
         if self.board[sq_c] != EMPTY:
             raise IllegalMove(f"\n{self}\n There is already a stone at {sq_c}")
         color = (WHITE if self.turn%2 ==1 else BLACK) 
+        opp_color = (BLACK if color == WHITE else WHITE) 
         possible_ko_color = possible_ko(self.board, sq_c)
         new_board = place_stone(color, self.board, sq_c)
-
-        opp_color = (BLACK if color == WHITE else WHITE) 
-        opp_stones = []
-        my_stones = []
-        for sq_n in NEIGHBORS[sq_c]:
-            if new_board[sq_n] == color:
-                my_stones.append(sq_n)
-            elif new_board[sq_n] == opp_color:
-                opp_stones.append(sq_n)
-
-        opp_captured = []
-        for sq_s in opp_stones:
-            new_board, captured = maybe_capture_stones(new_board, sq_s)
-            opp_captured += captured
 
         # Check for suicide
         new_board, captured = maybe_capture_stones(new_board, sq_c)
         if captured:
             raise IllegalMove(" \n{self}\n Move at {sq_c} is suicide.")
+        if testing: return
 
+        new_board, opp_captured = get_caps(new_board, sq_c, color)
         if len(opp_captured) == 1 and possible_ko_color == opp_color:
             new_ko = opp_captured[0] 
         else:
             new_ko = None
 
-        if not testing: 
-            self.board = new_board
-            self.moves.append(sq_c)
-            self.ko = new_ko
-            self.turn += 1 
+        self.board = new_board
+        self.moves.append(sq_c)
+        self.last_move = sq_c
+        self.ko = new_ko
+        self.turn += 1 
 
     def is_legal(self, sq_c):
         try:
@@ -97,13 +89,14 @@ class Game():
             return False
 
     def score(self):
-        '''Calculated using Chinese rules'''
+        '''Calculated using Chinese rules, assuming dead groups are captured
+        and no sekis'''
         board = self.board
         while EMPTY in board:
             empty = board.index(EMPTY)
             empties, borders = flood_fill(board, empty)
             bd_list = [board[sq_b] for sq_b in borders]
-            if bd_list.count(BLACK) > bd_list.count(WHITE):
+            if bd_list.count(BLACK) > 2*bd_list.count(WHITE):
                 border_color = BLACK
             else:
                 border_color = WHITE
@@ -138,13 +131,13 @@ class Game():
 
 def squash(c, alph = False):
     '''squash converts coordinate pair to single integer 0 <= n < N^2.
-    alph = True squashes a letter-number coorindate string '''
+    alph = True squashes a letter-number coordinate string '''
     if alph:
         #Letters skip I
         y = 8 if c[0] == 'J' else ord(c[0]) - 65 
         c = ( int(c[1]) - 1,  y)
-        if not ( 0 <= c[0] < N and 0 <= c[1] < N):
-            raise IllegalMove
+        if not is_on_board(c): 
+            raise IllegalMove("{} is not on the board".format(c))
     return N * c[0] + c[1]
 
 def unsquash(sq_c, alph = False):
@@ -187,6 +180,22 @@ def get_stone_lib(board, sq_c):
     stones, borders = flood_fill(board, sq_c)
     return len([sq_b for sq_b in borders if board[sq_b] == EMPTY])
 
+def get_caps(board, sq_c, color):
+        opp_color = BLACK if color == WHITE else WHITE
+        opp_stones = []
+        my_stones = []
+        for sq_n in NEIGHBORS[sq_c]:
+            if board[sq_n] == color:
+                my_stones.append(sq_n)
+            elif board[sq_n] == opp_color:
+                opp_stones.append(sq_n)
+        opp_captured = []
+        for sq_s in opp_stones:
+            new_board, captured = maybe_capture_stones(board, sq_s)
+            opp_captured += captured
+        new_board = bulk_place_stones(EMPTY, board, opp_captured)
+        return new_board, opp_captured
+
 class IllegalMove(Exception): pass
 
 #Helper functions
@@ -201,6 +210,7 @@ def bulk_place_stones(color, board, stones):
     return byteboard.decode('ascii') 
 
 def maybe_capture_stones(board, sq_c):
+    '''see if group at sq_c is captured'''
     chain, reached = flood_fill(board, sq_c)
     if not any(board[sq_r] == EMPTY for sq_r in reached):
         board = bulk_place_stones(EMPTY, board, chain)
