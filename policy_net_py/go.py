@@ -4,10 +4,11 @@ from textwrap import wrap
 N = 9 
 WHITE, BLACK, EMPTY = 'O', 'X', '.'
 EMPTY_BOARD = EMPTY*(N**2) 
+PASS = -1
 
 class Game():
     '''go.Game: a class to represent a go game. The board is represented as a length N^2 string
-    using "squashed coordinates" 0,1,...,N^2-1.
+    using "squashed coordinates" 0,1,...,N^2-1. PASS is -1
     optional parameters: 
         board: str -- initialize a board position
         ko: int -- the position of the current ko
@@ -46,6 +47,12 @@ class Game():
     def get_board(self):
         return [self.enc[s] for s in self.board]
 
+    def play_pass(self):
+        self.moves.append(PASS)
+        self.last_move = PASS 
+        self.turn += 1
+        self.ko = None
+
     def play_move(self, sq_c = None, testing = False):
         '''play move from self.moves. If a coordinate is given that is played instead.
         optional: return a list of captured stones after move is played.'''
@@ -54,6 +61,9 @@ class Game():
                 print("No more moves to play.")
                 return
             sq_c = self.moves[self.turn]
+        if sq_c == PASS:
+            self.play_pass()
+            return
         if sq_c == self.ko:
             raise IllegalMove(f"\n{self}\n Move at {sq_c} illegally retakes ko.")
         if self.board[sq_c] != EMPTY:

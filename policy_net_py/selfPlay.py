@@ -7,10 +7,11 @@ import multiprocessing as mp
 import torch
 from torch.distributions.categorical import Categorical
 
-def playout(pi_1, pi_2, device):
+def playout(game, pi_1, pi_2, device):
     '''Play game between policies pi_1 and pi_2, with pi_1 playing black and pi_2 playing white.''' 
-    game = go.Game()
     while True:
+        if game.turn > 70:
+            break
         mv1 = legal_sample(pi_1, game, device)
         if not mv1:
             break 
@@ -29,12 +30,13 @@ def legal_sample(pi, game, device):
     while not game.is_legal(move):
         move = policy_sample(pi, game, device )
         tries += 1
-        if tries > 100:
+        if tries > 1000:
+            print(go.unsquash(move.item(), alph = True))
             return
     return move
 
-def write_sgf(game, black, white, result, out_path):
-    out = f"(;GM[1]RU[Chinese]SZ[9]KM[5.5]PW[{white}]PB[{black}]RE[{result}]\n"
+def write_sgf(game, black, white, out_path):
+    out = f"(;GM[1]RU[Chinese]SZ[9]KM[5.5]PW[{white}]PB[{black}]\n"
     turn = "B"
     for mv in game.moves:
         x, y = chr(mv//9 + 97), chr(mv%9 +97)
@@ -44,18 +46,12 @@ def write_sgf(game, black, white, result, out_path):
     with open(out_path, 'w') as f:
         f.write(out)
 
-def selfplay(pi, n_games, device ):
-    for i in range(n_games):
-        game = playout(pi,pi, device) 
-        score = game.score()
-        if -20 < score < 20:
-            if score > 0:
-                res = f"B+{score}"
-            else:
-                res = f"W+{-score}"
-            out_path = str(i) + "_" + str(os.getpid()) + ".sgf"
-            write_sgf(game, "boke", "boke", res, out_path)
-        
+def selfPlayGame(pi, num_games, device):
+    for n in range(num_games):
+        g = go.Game(moves = [])
+        playout(g, pi, pi, device)        
+        out_path = f"sp_{n}_{os.getpid()}.sgf"
+        write_sgf(g, "boke", "boke", out_path)
         
 if __name__ == "__main__":
     pi = PolicyNet()
@@ -66,13 +62,12 @@ if __name__ == "__main__":
     mp.set_start_method("spawn")
     with torch.no_grad(): 
         processes = []
-        for i in range(16):
-            p = mp.Process(target = selfplay, args = (pi, 100, device,))
+        for _ in range(8):
+            p = mp.Process(target = selfPlayGame, args = (pi,300,device,))
             p.start()
             processes.append(p)
         for p in processes:
             p.join()
-            
     #optimizer = torch.optim.Adam(pi.parameters(), lr = 0.001)
 
     #games = 100

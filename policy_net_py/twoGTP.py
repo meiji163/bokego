@@ -88,8 +88,8 @@ def write_to_sgf(out_path, moves, score):
 
     
 
-GNUGO = ["gnugo", "--mode", "gtp"]
-GNUGO_MCTS = ["gnugo", "--mode", "gtp","--monte-carlo"]
+GNUGO = ["gnugo", "--chinese-rules","--mode", "gtp"]
+GNUGO_MCTS = ["gnugo", "--chinese-rules", "--mode", "gtp","--monte-carlo"]
 BOKE_B = ["python", "bokePlay.py", "--mode", "gtp", "-r", "200", "-c", "B"]
 BOKE_W = ["python", "bokePlay.py", "--mode", "gtp", "-r", "200"]
 

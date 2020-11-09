@@ -3,7 +3,7 @@ from random import choice, randrange
 import time
 import torch
 
-from bokePolicy import PolicyNet, policy_dist
+from bokeNet import PolicyNet, policy_dist
 import go
 from mcts import MCTS, Node
 

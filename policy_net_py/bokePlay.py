@@ -3,7 +3,7 @@ import re
 import sys
 import os
 from itertools import cycle
-from bokePolicy import PolicyNet, policy_predict
+from bokeNet import PolicyNet, policy_predict
 from go_mcts import *
 from mcts import MCTS, Node
 from threading import Thread
@@ -14,7 +14,7 @@ from time import sleep
 parser = argparse.ArgumentParser(description = "Play against Boke")
 parser.add_argument("-p", metavar="PATH", type = str, dest = 'p', help = "path to model", default = "v0.2/policy_v0.2_2020-11-07_1.pt")
 parser.add_argument("-c", type = str, action = 'store', choices = ['W','B'], dest = 'c', help = "Boke's color", default = ['W'])
-parser.add_argument("-r", nargs = 1, metavar="ROLLOUTS", action = 'store', type = int, default = [50], dest = 'r', help = "number of rollouts per move")
+parser.add_argument("-r", nargs = 1, metavar="ROLLOUTS", action = 'store', type = int, default = [100], dest = 'r', help = "number of rollouts per move")
 parser.add_argument("--mode", type = str, choices = ["gui","gtp"], default = "gui", help = "Graphical or GTP mode") 
 args = parser.parse_args()
 

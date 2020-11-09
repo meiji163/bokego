@@ -12,6 +12,7 @@ class MCTS:
         self.N = defaultdict(int)  # total visit count for each node
         self.children = dict()  # children of each node
         self.exploration_weight = exploration_weight
+        self.winrate = None 
 
     def choose(self, node):
         "Choose the best successor of node. (Choose a move in the game)"
@@ -27,7 +28,10 @@ class MCTS:
             return self.N[n]
 
         # Choose most visited node
-        return max(self.children[node], key=score)
+        best = max(self.children[node], key=score)
+        self.winrate = self.Q[best]/self.N[best]
+        print(self.winrate)
+        return best
 
     def do_rollout(self, node, n = 1):
         "Train for n iterations"
