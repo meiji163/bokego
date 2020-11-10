@@ -6,7 +6,7 @@ import argparse
 import numpy as np
 from tqdm import tqdm 
 #path to go.py  
-sys.path.append(r"/home/jupyter/BokeGo/policy_net_py")
+sys.path.append(r"/home/jupyter/BokeGo/python")
 import go
 
 
@@ -24,9 +24,9 @@ def pre_process(root_dir, target_dir):
             if not result:
                 continue
             mvs = get_moves(sgf)
-            if len(mvs) < 15:
+            if len(mvs) < 10:
                 continue
-            g = go.Game(moves = mvs)
+            g = go.Game(moves = mvs, turn =0 , last_move = None)
             rand = np.random.randint(2, len(mvs),size = 5)
             for i in range(len(mvs)):
                 if i in rand:
@@ -40,7 +40,6 @@ def pre_process(root_dir, target_dir):
                     g.play_move(mvs[i])
                 except go.IllegalMove:
                     break
-
 enc  = {go.EMPTY : 0, go.BLACK: 1, go.WHITE: -1}
 dec = {0: go.EMPTY, 1: go.BLACK, -1: go.WHITE}
 
@@ -89,7 +88,7 @@ def get_moves(sgf):
     for mv in match:
         if len(mv) == 0:
             mvs.append(-1) 
-        else: 
+        elif len(mv) == 2: 
             mvs.append(9*(ord(mv[0])-97) + ord(mv[1])-97 )
     return mvs
 

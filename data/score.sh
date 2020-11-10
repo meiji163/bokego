@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for file in $@;
+for file in data/*.sgf;
 do
     res="$(grep "RE\[\w*\]" $file)"
     if [ -z "$res" ]; then
