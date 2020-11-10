@@ -2,16 +2,21 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 import math
 
+from bokeNet import ValueNet, value
+
 EXPAND_THRESH = 10
 
 class MCTS:
     "Monte Carlo tree searcher. First rollout the tree then choose a move."
 
-    def __init__(self, exploration_weight=1):
+    def __init__(self, value_net: ValueNet=None, exploration_weight=1, value_net_weight=0.5):
         self.Q = defaultdict(int)  # total reward of each node
         self.N = defaultdict(int)  # total visit count for each node
+        self.V = defaultdict(int)  # accumulated value net evaluations
         self.children = dict()  # children of each node
+        self.value_net = value_net
         self.exploration_weight = exploration_weight
+        self.value_net_weight = value_net_weight
         self.winrate = None 
 
     def choose(self, node):
@@ -39,9 +44,10 @@ class MCTS:
             # Get path to leaf of current search tree
             path = self._descend(node)
             leaf = path[-1]
+            leaf_val = value(self.value_net, leaf, leaf.device)
             # Get result of rollout starting from leaf
             score = self._simulate(leaf)
-            self._backpropagate(path, score)
+            self._backpropagate(path, score, leaf_val)
 
     def _descend(self, node):
         "Return a path from root down to leaf via PUCT selection"
@@ -75,11 +81,12 @@ class MCTS:
                 return reward
             node = node.find_random_child()
 
-    def _backpropagate(self, path, reward):
+    def _backpropagate(self, path, reward, leaf_val):
         "Send the reward back up to the ancestors of the leaf"
         for node in reversed(path):
             self.N[node] += 1
             self.Q[node] += reward
+            self.V[node] += leaf_val
             reward = 1 - reward
 
     def _puct_select(self, node):
@@ -94,7 +101,8 @@ class MCTS:
             node.set_dist()
         def puct(n):
             last_move_prob = node.dist.probs[n.last_move].item()
-            avg_reward = 0 if self.N[n] == 0 else self.Q[n] / self.N[n]
+            avg_reward = 0 if self.N[n] == 0 else ((1 - self.value_net_weight) * self.Q[n]
+                                                    + self.value_net_weight * self.V[n]) / self.N[n]
             return avg_reward + (self.exploration_weight
                     * last_move_prob 
                     * math.sqrt(total_visits) / (1 + self.N[n]))
