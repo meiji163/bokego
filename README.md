@@ -34,3 +34,7 @@ GTP mode is supported to play on goban GUIs.
 GnuGo (B) vs. Boke (W)
 
 ![boke vs gnugo](https://media.giphy.com/media/T9E8NcDPFe5PAdmyxT/giphy.gif)
+
+Boke vs. Boke
+
+![boke vs boke](https://media.giphy.com/media/jZxYkgEyDSkCd7QQRz/giphy.gif)

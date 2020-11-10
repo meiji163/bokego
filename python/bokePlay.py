@@ -3,7 +3,7 @@ import re
 import sys
 import os
 from itertools import cycle
-from bokeNet import PolicyNet, policy_dist
+from bokeNet import PolicyNet, ValueNet, policy_dist
 from go_mcts import *
 from mcts import MCTS, Node
 from threading import Thread
@@ -12,7 +12,8 @@ import argparse
 from time import sleep
 
 parser = argparse.ArgumentParser(description = "Play against Boke")
-parser.add_argument("-p", metavar="PATH", type = str, dest = 'p', help = "path to model", default = "v0.2/policy_v0.2_2020-11-07_1.pt")
+parser.add_argument("-p", metavar="PATH", type = str, dest = 'p', help = "path to policy", default = "v0.2/policy_v0.2_2020-11-07_1.pt")
+parser.add_argument("-v", metavar="PATH", type = str, dest = 'v', help = "path to value net", default = "v0.2/value_2020-11-10_4.pt")
 parser.add_argument("-c", type = str, action = 'store', choices = ['W','B'], dest = 'c', help = "Boke's color", default = ['W'])
 parser.add_argument("-r", nargs = 1, metavar="ROLLOUTS", action = 'store', type = int, default = [100], dest = 'r', help = "number of rollouts per move")
 parser.add_argument("--mode", type = str, choices = ["gui","gtp"], default = "gui", help = "Graphical or GTP mode") 
@@ -134,8 +135,13 @@ if  __name__ == "__main__":
     pi.load_state_dict(checkpt["model_state_dict"])
     pi.to(device)
     pi.eval()
+    val = ValueNet()
+    checkpt = load(args.v, map_location = device)
+    val.load_state_dict(checkpt["model_state_dict"])
+    val.to(device)
+    val.eval()
     board = Go_MCTS(policy = pi, device = device)
-    tree = MCTS(exploration_weight = 5)
+    tree = MCTS(value_net = val, exploration_weight = 0.5)
     set_grad_enabled(False)
 
     if args.mode == 'gtp':
