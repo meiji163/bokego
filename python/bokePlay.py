@@ -4,16 +4,16 @@ import sys
 import os
 from itertools import cycle
 from bokeNet import PolicyNet, ValueNet, policy_dist
-from go_mcts import *
-from mcts import MCTS, Node
+from mcts import MCTS, Go_MCTS
 from threading import Thread
+import torch
 from torch import load, device, set_grad_enabled 
 import argparse
 from time import sleep
 
 parser = argparse.ArgumentParser(description = "Play against Boke")
 parser.add_argument("-p", metavar="PATH", type = str, dest = 'p', help = "path to policy", default = "v0.2/RL_policy_2.pt")
-parser.add_argument("-v", metavar="PATH", type = str, dest = 'v', help = "path to value net", default = "v0.2/value_2020-11-10_4.pt")
+parser.add_argument("-v", metavar="PATH", type = str, dest = 'v', help = "path to value net", default = "v0.2/value_2020-11-13_6.pt")
 parser.add_argument("-c", type = str, action = 'store', choices = ['W','B'], dest = 'c', help = "Boke's color", default = ['W'])
 parser.add_argument("-r", nargs = 1, metavar="ROLLOUTS", action = 'store', type = int, default = [100], dest = 'r', help = "number of rollouts per move")
 parser.add_argument("--mode", type = str, choices = ["gui","gtp"], default = "gui", help = "Graphical or GTP mode") 
