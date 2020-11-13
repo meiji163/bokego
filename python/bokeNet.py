@@ -187,23 +187,36 @@ def separate(arr):
     out[6, arr >6] = 7
     return out 
 
-def policy_dist(policy: PolicyNet, game: go.Game , device = "cpu"):
+def policy_dist(policy: PolicyNet,
+                game: go.Game,
+                device = torch.device("cpu"),
+                fts: torch.Tensor=None):
     '''Return torch.distribution.Categorial distribution over coordinates'''
-    fts = features(game).unsqueeze(0)
-    fts = fts.to(device)
+    if fts is None:
+        fts = features(game)
+    fts = fts.unsqueeze(0).to(device)
     probs = SOFT(policy(fts)).squeeze(0)
     dist = Categorical(probs)
     return dist
 
-def value(v: ValueNet, game: go.Game, device = torch.device("cpu")):
-    fts = features(game).unsqueeze(0).to(device)
+def value(v: ValueNet,
+          game: go.Game,
+          device = torch.device("cpu"),
+          fts: torch.Tensor=None):
+    if fts is None:
+        fts = features(game)
+    fts = fts.unsqueeze(0).to(device)
     return v(fts).item()
 
-def policy_sample(policy: PolicyNet, game: go.Game, device = "cpu"):
+def policy_sample(policy: PolicyNet,
+                  game: go.Game,
+                  device = torch.device("cpu"),
+                  fts: torch.Tensor=None):
     '''sample a move from policy distribution. Use policy_dist
     for multiple samplings'''
-    fts = features(game).unsqueeze(0)
-    fts = fts.to(device)
+    if fts is None:
+        fts = features(game)
+    fts = fts.unsqueeze(0).to(device)
     probs = SOFT(policy(fts)).squeeze(0)
     m = Categorical(probs)
     return m.sample()
