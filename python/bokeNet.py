@@ -93,14 +93,14 @@ class NinebyNineGames(Dataset):
         return len(self.boards)
 
     def __getitem__(self, idx):
-        board, ko, turn, last, res = self.boards.iloc[idx]
+        board, ko, turn, last, move= self.boards.iloc[idx]
         g = go.Game(board = board, turn = turn, ko = ko, last_move = last)
-        if (res == 'B' and turn%2 == 0) or (res == 'W' and turn%2 == 1):
+        #if (res == 'B' and turn%2 == 0) or (res == 'W' and turn%2 == 1):
         #reward = 1 if current player wins the game, -1 if he loses.
-            reward = 1.0
-        else:
-            reward = -1.0
-        return features(g), reward 
+        #    reward = 1.0
+        #else:
+        #    reward = -1.0
+        return features(g), move 
 
     @staticmethod
     def convert_type(x):
@@ -159,7 +159,7 @@ def features(game: go.Game):
     else:
         turn = np.zeros((1,9,9), dtype = float)
     last_mv = np.zeros(81, dtype = float)
-    if game.last_move is not None and game.last_move >= 0:
+    if isinstance(game.last_move, int) and game.last_move >= 0:
         last_mv[game.last_move] = 1.0
     last_mv = last_mv.reshape(1,9,9)
     legal = np.array([game.is_legal(sq_c) for sq_c in range(81)], dtype = float) #very slow
@@ -196,7 +196,7 @@ def policy_dist(policy: PolicyNet, game: go.Game , device = "cpu"):
     dist = Categorical(probs)
     return dist
 
-def value(v: ValueNet, game: go.Game, device = "cpu"):
+def value(v: ValueNet, game: go.Game, device = torch.device("cpu")):
     fts = features(game).unsqueeze(0).to(device)
     return v(fts).item()
 

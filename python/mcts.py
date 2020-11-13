@@ -44,7 +44,7 @@ class MCTS:
             # Get path to leaf of current search tree
             path = self._descend(node)
             leaf = path[-1]
-            leaf_val = value(self.value_net, leaf, leaf.device)
+            leaf_val = value(self.value_net, leaf, device = leaf.device)
             # Get result of rollout starting from leaf
             score = self._simulate(leaf)
             self._backpropagate(path, score, leaf_val)

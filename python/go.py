@@ -16,7 +16,7 @@ class Game():
         moves: list -- the list of moves played
         sgf: str -- path to an sgf to initialize from
         '''
-    def __init__(self, board = EMPTY_BOARD, ko = None, last_move = None, turn = 0, moves = [], komi = 5.5, sgf = None):
+    def __init__(self, board = EMPTY_BOARD, ko = None, last_move = None, turn = 0, moves = None, komi = 5.5, sgf = None):
         self.turn = turn
         self.ko = ko
         self.board= board
@@ -39,13 +39,16 @@ class Game():
         return "\t  " +' '.join(["ABCDEFGHJKLMNOPQRST"[i] for i in range(N)]) +"\n" \
             + '\n'.join(['\t'+str(i + 1)+' '+ ' '.join( out[N*i:N*(i+1)]) for i in range(N)])
     def __len__(self):
-        return len(self.moves)
+        if self.moves:
+            return len(self.moves)
+        return 0
 
     def get_board(self):
         return [self.enc[s] for s in self.board]
 
     def play_pass(self):
-        self.moves.append(PASS)
+        if not self.moves:
+            self.moves = [PASS]
         self.last_move = PASS 
         self.turn += 1
         self.ko = None
@@ -55,7 +58,7 @@ class Game():
         optional: return a list of captured stones after move is played.'''
         if sq_c == None:
             if self.turn >= len(self):
-                print("No more moves to play.")
+                print("No moves to play.")
                 return
             sq_c = self.moves[self.turn]
         if sq_c == PASS:
@@ -79,8 +82,11 @@ class Game():
         if captured:
             raise IllegalMove(f"\n{self}\n Move at {sq_c} is suicide.")
         if testing: return
+        if not self.moves:
+            self.moves = [sq_c]
+        else:
+            self.moves.append(sq_c)
         self.board = new_board
-        self.moves.append(sq_c)
         self.last_move = sq_c
         self.ko = new_ko
         self.turn += 1 

@@ -36,7 +36,7 @@ def loading():
         sys.stdout.flush()
         sleep(0.1)
 
-def gtp(tree, policy):
+def gtp(tree, policy, device):
     '''Go Text Protocol (GTP) interface'''
     commands = ["name","boardsize", "clear_board", "komi", "play", "genmove", "final_score", "quit",\
                 "version", "showboard", "known_command", "protocol_version", "list_commands"]
@@ -73,7 +73,7 @@ def gtp(tree, policy):
             else:
                 out = ""
         elif cmd[0] == "clear_board":
-            board = Go_MCTS(policy = policy)
+            board = Go_MCTS(policy = policy, device = device)
             out = ""
         elif cmd[0] == "komi":
             board = Go_MCTS(policy = policy, komi = float(cmd[1]))
@@ -141,11 +141,11 @@ if  __name__ == "__main__":
     val.to(device)
     val.eval()
     board = Go_MCTS(policy = pi, device = device)
-    tree = MCTS(value_net = val, exploration_weight = 0.5)
+    tree = MCTS(value_net = val, exploration_weight = 1)
     set_grad_enabled(False)
 
     if args.mode == 'gtp':
-        gtp(tree, pi)
+        gtp(tree, pi, device)
         sys.exit()
 
     if args.c[0] == 'B': 

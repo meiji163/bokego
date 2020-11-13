@@ -18,33 +18,31 @@ args = parser.parse_args()
 def pre_process(root_dir, target_dir):
     sgf_files = [ s for s in os.scandir(root_dir) if s.path.endswith(".sgf")]
     with open(target_dir, 'w') as f:
-        f.write("board,ko,turn,last,result\n")
+        f.write("board,ko,turn,last,move\n")
         for sgf in sgf_files: 
-            result = get_result(sgf)
-            if not result:
-                continue
+            #result = get_result(sgf)
+            #if not result:
+            #    continue
             mvs = get_moves(sgf)
             if len(mvs) < 10:
                 continue
-            g = go.Game(moves = mvs, turn =0 , last_move = None)
-            rand = np.random.randint(2, len(mvs),size = 5)
-            for i in range(len(mvs)):
-                if i in rand:
+            g = go.Game(moves = [], turn =0 , last_move = None)
+            #rand = np.random.randint(2, len(mvs),size = 5)
+            for i in range(len(mvs)-1):
+                if mvs[i] != -1:
                     last = None if i == 0 else g.last_move
                     board, ko, move = g.board, g.ko, mvs[i]
                     for k in range(4):
-                        f.write(data_str(board, ko, i, last, result))
-                        f.write(data_str(refl(board), refl(ko), i, refl(last), result))
-                        board, ko, last = rot(board), rot(ko), rot(last)
-                try:
-                    g.play_move(mvs[i])
-                except go.IllegalMove:
-                    break
+                        f.write(data_str(board, ko, i, last, move))
+                        f.write(data_str(refl(board), refl(ko), i, refl(last), refl(move)))
+                        board, ko, last , move= rot(board), rot(ko), rot(last), rot(move)
+                g.play_move(mvs[i])
+        print(go.unsquash(g.moves))
 enc  = {go.EMPTY : 0, go.BLACK: 1, go.WHITE: -1}
 dec = {0: go.EMPTY, 1: go.BLACK, -1: go.WHITE}
 
-def data_str(board, ko , mv_num, last, result):
-    return ','.join([board, str(ko), str(mv_num), str(last), result +'\n']) 
+def data_str(board, ko , mv_num, last, move):
+    return ','.join([board, str(ko), str(mv_num), str(last), str(move)+'\n']) 
 
 def rot(b):
     #rotates 90 deg clockwise

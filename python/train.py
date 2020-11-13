@@ -17,20 +17,23 @@ if __name__ == "__main__":
     
     print("Loading data...")
     data = NinebyNineGames(args.d[0])
-    dataloader = DataLoader(data, batch_size = 32, shuffle = True, num_workers = 10)
+    dataloader = DataLoader(data, batch_size = 64, shuffle = True, num_workers = 12)
     #validation_set = NinebyNineGames("/home/jupyter/BokeGo/data/validation.csv") 
     #validloader = DataLoader(validation_set, batch_size = 128, shuffle = True, num_workers = 10)
     print("Number of board positions: {}".format(len(data)))
 
-    v = ValueNet()
-    v.cuda()
-    err = nn.MSELoss()
+    #v = ValueNet()
+    #v.cuda()
+    #err = nn.MSELoss()
+    pi = PolicyNet()
+    pi.cuda()
+    err = nn.CrossEntropyLoss()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu") 
-    optimizer = torch.optim.Adam(v.parameters(), lr = 1e-5)
+    optimizer = torch.optim.Adam(pi.parameters())
     if args.c:
         print("Loading checkpoint...")
         checkpt = torch.load(args.c[0], map_location = device)
-        v.load_state_dict(checkpt["model_state_dict"] )
+        pi.load_state_dict(checkpt["model_state_dict"] )
         optimizer.load_state_dict(checkpt["optimizer_state_dict"]) 
         epochs_trained = checkpt["epoch"]
 
@@ -38,7 +41,8 @@ if __name__ == "__main__":
             for k, t in state.items():
                 if torch.is_tensor(t):
                     state[k] = t.cuda()
-        v.train()
+        #v.train()
+        pi.train()
     else:
         epochs_trained = 0 
 
@@ -48,19 +52,19 @@ if __name__ == "__main__":
         print("Epoch: {}".format(epochs_trained + 1))
         running_loss = 0.0
         for i, data in tqdm(enumerate(dataloader,0)):
-            inputs, res = data
-            inputs, res = inputs.to(device), res.to(device).float()
+            inputs, moves = data
+            inputs, moves = inputs.to(device), moves.to(device) 
             
             optimizer.zero_grad()
-            outputs = v(inputs)
+            outputs = pi(inputs)
             
             #backprop
-            loss = err(outputs, res.unsqueeze(1))
+            loss = err(outputs, moves) 
             loss.backward()
             optimizer.step()
         
             running_loss += loss.item()
-            if i%2000 == 1999:
+            if i%4000 == 3999:
                 print(" Loss: ", running_loss)
                 running_loss = 0.0
                 #pi.eval()
@@ -75,10 +79,10 @@ if __name__ == "__main__":
                         #loss = err( outputs, moves)
                         #valid_loss += loss
                     #print(" Validation Loss: {}".format(valid_loss))
-                #pi.train()
+               # pi.train()
      
         epochs_trained += 1
-        out_path = os.getcwd() + "/value_" \
+        out_path = os.getcwd() + "/policy_" \
                     + str(date.today()) + "_" + str(epochs_trained)+ ".pt"  
-        torch.save({"model_state_dict": v.state_dict(), "optimizer_state_dict": optimizer.state_dict(), "epoch": epochs_trained}, out_path)
+        torch.save({"model_state_dict": pi.state_dict(), "optimizer_state_dict": optimizer.state_dict(), "epoch": epochs_trained}, out_path)
 

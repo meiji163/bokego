@@ -31,7 +31,7 @@ class GTPprocess(object):
 class GTPplyr(object):
 
     def __init__(self, color, args):
-        sewlf.color = color 
+        self.color = color 
         self.gtp_subprocess = GTPprocess(color, args)
 
     def name(self):
