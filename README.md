@@ -12,8 +12,9 @@ The current version of Boke won 8/10 games against GnuGo 3.8.
 * Port to C++
 
 ## Play Boke
-The requirements to test the current python version are PyTorch and NumPy. 
+The requirements to test the current python version are PyTorch and NumPy (compatible versions listed in requirements.txt).
 ```
+pip install -r requirements.txt
 cd BokeGo/policy_net_py
 python3 bokePlay.py --help
 usage: bokePlay.py [-h] [-p PATH] [-c {W,B}] [-r ROLLOUTS] [--mode {gui,gtp}]
