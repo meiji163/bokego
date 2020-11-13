@@ -6,7 +6,7 @@ from selfPlay import gnu_score
 import time
 import torch
 
-from bokeNet import ValueNet, value, PolicyNet, policy_dist
+from bokeNet import ValueNet, value, PolicyNet, policy_dist, features
 import go
 
 MAX_TURNS = 70
@@ -15,12 +15,17 @@ EXPAND_THRESH = 10
 class MCTS:
     "Monte Carlo tree searcher. First rollout the tree then choose a move."
 
-    def __init__(self, value_net: ValueNet=None, exploration_weight=1, value_net_weight=0.5):
+    def __init__(self,
+                 value_net: ValueNet=None,
+                 policy_net: PolicyNet=None,
+                 exploration_weight=1,
+                 value_net_weight=0.5):
         self.Q = defaultdict(int)  # total reward of each node
         self.N = defaultdict(int)  # total visit count for each node
         self.V = defaultdict(int)  # accumulated value net evaluations
         self.children = dict()  # children of each node
         self.value_net = value_net
+        self.policy_net = policy_net
         self.exploration_weight = exploration_weight
         self.value_net_weight = value_net_weight
         self.winrate = None 
@@ -50,10 +55,13 @@ class MCTS:
             # Get path to leaf of current search tree
             path = self._descend(node)
             leaf = path[-1]
-            leaf_val = value(self.value_net, leaf, device = leaf.device)
+            if leaf.features is None:
+                leaf.set_features()
+            if not leaf.value:
+                leaf.set_value(self.value_net)
             # Get result of rollout starting from leaf
             score = self._simulate(leaf)
-            self._backpropagate(path, score, leaf_val)
+            self._backpropagate(path, score, leaf.value)
 
     def _descend(self, node):
         "Return a path from root down to leaf via PUCT selection"
@@ -85,7 +93,7 @@ class MCTS:
                 reward = node.reward()
                 reward = invert_reward^reward
                 return reward
-            node = node.find_random_child()
+            node = node.find_random_child(self.policy_net)
 
     def _backpropagate(self, path, reward, leaf_val):
         "Send the reward back up to the ancestors of the leaf"
@@ -104,7 +112,7 @@ class MCTS:
         if total_visits == 0:
             total_visits = 1
         if not node.dist:
-            node.set_dist()
+            node.set_dist(self.policy_net)
         def puct(n):
             last_move_prob = node.dist.probs[n.last_move].item()
             avg_reward = 0 if self.N[n] == 0 else ((1 - self.value_net_weight) * self.Q[n]
@@ -124,19 +132,19 @@ class Go_MCTS(go.Game):
     functions for determining if the game is legally finished.
 
     Attributes:
-        policy: a PolicyNet for move selection
         terminal: a boolean indicating whether the game is legally finished
         color: a boolean indicating the current player's color;
                True = Black, False = White
     """
     def __init__(self, board=go.EMPTY_BOARD, ko=None, turn=0, moves=[],
-                 sgf=None, policy: PolicyNet=None, terminal=False,
+                 sgf=None, terminal=False,
                  color=True, last_move=None, komi = 5.5, device = "cpu"):
         super().__init__(board, ko, last_move, turn, moves, komi, sgf)
-        self.policy = policy
         self.terminal = terminal 
         self.color = color
         self.dist = None
+        self.features = None
+        self.value = None
         self.device = device
 
     def __eq__(self, other):
@@ -147,9 +155,9 @@ class Go_MCTS(go.Game):
 
     def __copy__(self):
         return Go_MCTS(board=self.board, ko=self.ko, turn=self.turn,
-                       moves=self.moves, policy=self.policy,
-                       terminal=self.terminal, color=self.color,
-                       last_move=self.last_move, komi = self.komi, device = self.device)
+                       moves=self.moves, terminal=self.terminal,
+                       color=self.color, last_move=self.last_move,
+                       komi = self.komi, device = self.device)
     
     def find_children(self):
         '''Returns a set of boards (Go_MCTS objects) derived from legal
@@ -158,14 +166,14 @@ class Go_MCTS(go.Game):
             return set()      
         return {self.make_move(i) for i in self.get_all_legal_moves()}
     
-    def find_random_child(self):
+    def find_random_child(self, policy: PolicyNet):
         '''Draws legal move from distribution given by policy. If no
         policy is given, a legal move is drawn uniformly.
         Returns a copy of the board (Go_MCTS object) after the move has
         been played.'''
         if self.terminal:
             return self # Game is over; no moves can be made
-        return self.make_move(self.get_move()) 
+        return self.make_move(self.get_move(policy)) 
 
     def reward(self):
         '''Returns 1 if Black wins, 0 if White wins.'''
@@ -187,29 +195,33 @@ class Go_MCTS(go.Game):
     def get_all_legal_moves(self):
         return [i for i in range(go.N ** 2) if self.is_legal(i)]
 
-    def get_move(self):
-        if self.policy: 
-            move = self.dist_sample()
-            while not self.is_legal(move):
-                move = self.dist_sample() 
-            return move
-        else:
-            move = randrange(0, go.N ** 2)
-            while not self.is_legal(move):
-                move = randrange(0, go.N ** 2)
-            return move 
+    def get_move(self, policy: PolicyNet):
+        move = self.dist_sample(policy)
+        while not self.is_legal(move):
+            move = self.dist_sample(policy) 
+        return move
 
     # Do not use until we figure out how to best terminate the game
     def is_game_over(self):
         '''Terminate after MAX_TURNS''' 
         return self.turn > MAX_TURNS
 
-    def set_dist(self):
+    def set_dist(self, policy: PolicyNet):
         '''Set the probability distribution for this board'''
-        self.dist = policy_dist(self.policy, self, device = self.device)
+        if self.features is None:
+            self.set_features()
+        self.dist = policy_dist(policy, self, device = self.device, fts=self.features)
     
-    def dist_sample(self):
+    def dist_sample(self, policy: PolicyNet):
         '''Sample a move from the policy distribution'''
         if not self.dist:
-            self.set_dist()
+            self.set_dist(policy)
         return self.dist.sample().item()
+
+    def set_features(self):
+        '''Set the policy features for this board'''
+        self.features = features(self)
+
+    def set_value(self, value_net: ValueNet):
+        '''Set the value net valuation for this board'''
+        self.value = value(value_net, self, device = self.device, fts=self.features)
