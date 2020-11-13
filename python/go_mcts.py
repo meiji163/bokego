@@ -1,5 +1,6 @@
 import copy
 from random import choice, randrange
+from selfPlay import gnu_score
 import time
 import torch
 
@@ -62,7 +63,7 @@ class Go_MCTS(go.Game, Node):
 
     def reward(self):
         '''Returns 1 if Black wins, 0 if White wins.'''
-        return int(self.score() > 0)
+        return gnu_score(self)
 
     def make_move(self, index):
         '''Returns a copy of the board (Go_MCTS object) after the move

@@ -73,7 +73,6 @@ class ValueNet(nn.Module):
             nn.Conv2d(128, 128, 3, padding = 1))
         self.lin1 = nn.Linear(128*9*9, 1)
         self.relu = nn.ReLU()
-        self.tanh = nn.Tanh()
 
     def forward(self, x):
         x = self.relu(self.conv(x))
@@ -93,14 +92,14 @@ class NinebyNineGames(Dataset):
         return len(self.boards)
 
     def __getitem__(self, idx):
-        board, ko, turn, last, move= self.boards.iloc[idx]
+        board, ko, turn, last, res = self.boards.iloc[idx]
         g = go.Game(board = board, turn = turn, ko = ko, last_move = last)
         #if (res == 'B' and turn%2 == 0) or (res == 'W' and turn%2 == 1):
         #reward = 1 if current player wins the game, -1 if he loses.
         #    reward = 1.0
         #else:
         #    reward = -1.0
-        return features(g), move 
+        return features(g), res 
 
     @staticmethod
     def convert_type(x):

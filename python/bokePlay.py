@@ -12,7 +12,7 @@ import argparse
 from time import sleep
 
 parser = argparse.ArgumentParser(description = "Play against Boke")
-parser.add_argument("-p", metavar="PATH", type = str, dest = 'p', help = "path to policy", default = "v0.2/policy_v0.2_2020-11-07_1.pt")
+parser.add_argument("-p", metavar="PATH", type = str, dest = 'p', help = "path to policy", default = "v0.2/RL_policy_2.pt")
 parser.add_argument("-v", metavar="PATH", type = str, dest = 'v', help = "path to value net", default = "v0.2/value_2020-11-10_4.pt")
 parser.add_argument("-c", type = str, action = 'store', choices = ['W','B'], dest = 'c', help = "Boke's color", default = ['W'])
 parser.add_argument("-r", nargs = 1, metavar="ROLLOUTS", action = 'store', type = int, default = [100], dest = 'r', help = "number of rollouts per move")

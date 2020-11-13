@@ -53,7 +53,7 @@ def write_sgf(game, out_path):
 
 def gnu_score(game):
     #temp = os.environ["TMPDIR"] + str(os.getpid()) + ".sgf"
-    temp = "temp/" + str(os.getpid())+".sgf"
+    temp = str(os.getpid())+".sgf"
     write_sgf(game, temp) 
     p =Popen(["gnugo", "--komi", "5.5", "--mode", "gtp", "--chinese-rules", "-l", temp], \
                     stdin = PIPE, stdout = PIPE)
@@ -61,6 +61,7 @@ def gnu_score(game):
     p.stdin.flush()
     rec = p.stdout.readline().decode('utf-8').strip('\n')
     p.communicate("quit\n".encode('utf-8'))
+    os.remove(temp)
     res = re.search("[BW]\+.+",rec)
     if res:
         return 1 if 'B' in res[0] else 0 
