@@ -140,8 +140,8 @@ if  __name__ == "__main__":
     val.load_state_dict(checkpt["model_state_dict"])
     val.to(device)
     val.eval()
-    board = Go_MCTS(policy = pi, device = device)
-    tree = MCTS(value_net = val, exploration_weight = 1)
+    board = Go_MCTS(device = device)
+    tree = MCTS(value_net = val, policy_net=pi, exploration_weight = 1)
     set_grad_enabled(False)
 
     if args.mode == 'gtp':
