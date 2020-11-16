@@ -19,13 +19,13 @@ def playout(game, pi_1, pi_2, device = DEV):
         if game.turn > 79:
             break
         mv1 = legal_sample(pi_1, game, device)
-        if not mv1:
+        if mv1 is None:
             break 
         else:
             game.play_move(mv1.item())
         mv2 = legal_sample(pi_2, game, device)        
-        if not mv2:
-           break 
+        if mv2 is None:
+            break 
         else:
             game.play_move(mv2.item())
 
@@ -36,14 +36,19 @@ def legal_sample(pi, game, device = DEV):
         move = policy_sample(pi, game, device )
         tries += 1
         if tries > 1500:
-            #print(go.unsquash(move.item(), alph = True))
             return
     return move
 
-def write_sgf(game, out_path):
-    out = f"(;GM[1]RU[Chinese]SZ[9]KM[5.5]\n"
+def write_sgf(moves, out_path, B = None, W = None, result = None):
+    '''Write minimal sgf for moves list to outpath'''
+    out = f"(;GM[1]RU[Chinese]"
+    if B and W:
+        out += f"PB[{B}]PW[{W}]"
+    if result:
+        out += f"RE[{result}]"
+    out += "SZ[9]KM[5.5]\n"
     turn = "B"
-    for mv in game.moves:
+    for mv in moves:
         x, y = chr(mv//9 + 97), chr(mv%9 +97)
         out += f";{turn}[{x}{y}]\n"
         turn = "W" if turn == "B" else "B" 
@@ -52,9 +57,9 @@ def write_sgf(game, out_path):
         f.write(out)
 
 def gnu_score(game):
-    #temp = os.environ["TMPDIR"] + str(os.getpid()) + ".sgf"
-    temp = str(os.getpid())+".sgf"
-    write_sgf(game, temp) 
+    '''Scores the game using gnugo opened in a subprocess'''
+    temp = "/tmp/" + str(os.getpid())+".sgf" #put temp directory here
+    write_sgf(game.moves, temp) 
     p =Popen(["gnugo", "--komi", "5.5", "--mode", "gtp", "--chinese-rules", "-l", temp], \
                     stdin = PIPE, stdout = PIPE)
     p.stdin.write("final_score\n".encode('utf-8'))
@@ -77,47 +82,77 @@ def self_play(pi1, pi2, num_games, device = DEV):
         results.append(gnu_score(g))
     return games, results
 
-def reinforce(pi, pi_opp, batch_size, n_itrs = 1, device = DEV):
-    optimizer = torch.optim.Adam(pi.parameters(), lr = 1e-4)
-    winrates = []
+def reinforce(pi, pi_opp, optimizer, batch_size = 32, n_itrs = 1, device = DEV):
+    '''Implement the REINFORCE policy gradient descent algorithm'''
+    winlist = []
     for itr in trange(n_itrs):
         wins = 0 
         games, results = self_play(pi, pi_opp, batch_size, device = DEV)
         for i in range(batch_size):
             loss = 0.0
             g = go.Game(moves = games[i])
+            #training policy plays black 
+            reward = 1 if results[i] == 1 else -1
             for j in range(0,len(g),2):
                 dist = policy_dist(pi, g, DEV)
                 mv = torch.tensor(g.moves[j]).to(device)
-                loss += -dist.log_prob(mv)
+                loss += -dist.log_prob(mv)*reward
                 try:
                     g.play_move()
                     g.play_move()
                 except go.IllegalMove:
                     break
-            #training policy plays BLACK
             wins += results[i]
-            loss *= results[i] 
-        if itr>9:
-            avg_win = sum(winrates[-10:])/(batch_size*10)
+
+        winlist.append(wins)
+        if len(winlist)%11 == 10:
+            avg_win = sum(winlist[-10:])/(batch_size*10)
             print(f"Winrate: {avg_win}")
-        winrates.append(wins)
+
         loss /= batch_size
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-    print(winrates)
-                
+
 if __name__ == "__main__":
+
+    mp.set_start_method("spawn")
+    epochs = 10
     pi = PolicyNet()
-    checkpt = torch.load("v0.2/RL_policy_1.pt",map_location = DEV) 
+    optimizer = torch.optim.Adam(pi.parameters())
+    checkpt = torch.load("v0.2/RL_policy_13.pt",map_location = DEV) 
+    optimizer.load_state_dict(checkpt["optimizer_state_dict"])
+
+    for state in optimizer.state.values():
+        for k, t in state.items():
+            if torch.is_tensor(t):
+                state[k] = t.cuda()
+
     pi.load_state_dict(checkpt["model_state_dict"])
-    pi_opp = deepcopy(pi)
     pi.to(DEV)
-    pi_opp.to(DEV)
     pi.train()
-    pi_opp.eval()
- 
-    reinforce(pi, pi_opp, 16, 300, DEV)
-    out_path = os.getcwd() + "/RL_policy_3.pt"
-    torch.save({"model_state_dict":pi.state_dict()}, out_path)
+    pi.share_memory()
+    n_opps = 23 
+
+    for _ in range(epochs):
+        pi_opp = PolicyNet()
+        #choose a random opponent from the previous policies
+        n = randint(1,n_opps)
+        opp_checkpt = torch.load(f"v0.2/RL_policy_{n}.pt", map_location = DEV)
+        print(f"Playing against Policy {n}")
+        pi_opp.load_state_dict(opp_checkpt["model_state_dict"])
+        pi_opp.to(DEV)
+        pi_opp.eval()
+        
+        processes = []
+        for _ in range(8):
+            p = mp.Process( target = reinforce, args = (pi, pi_opp, optimizer, 16, 60))
+            p.start()
+            processes.append(p)
+        
+        for p in processes:
+            p.join()
+
+        n_opps += 1
+        out_path = os.getcwd() + f"/v0.2/RL_policy_{n_opps}.pt"
+        torch.save({"model_state_dict":pi.state_dict(), "optimizer_state_dict":optimizer.state_dict()}, out_path)

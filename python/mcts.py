@@ -9,7 +9,7 @@ import torch
 from bokeNet import ValueNet, value, PolicyNet, policy_dist, features
 import go
 
-MAX_TURNS = 70
+MAX_TURNS = 76
 EXPAND_THRESH = 10
 
 class MCTS:
@@ -46,7 +46,6 @@ class MCTS:
         # Choose most visited node
         best = max(self.children[node], key=score)
         self.winrate = self.Q[best]/self.N[best]
-        print(self.winrate)
         return best
 
     def do_rollout(self, node, n = 1):
@@ -57,7 +56,7 @@ class MCTS:
             leaf = path[-1]
             if leaf.features is None:
                 leaf.set_features()
-            if not leaf.value:
+            if self.value_net and not leaf.value:
                 leaf.set_value(self.value_net)
             # Get result of rollout starting from leaf
             score = self._simulate(leaf)
@@ -100,7 +99,8 @@ class MCTS:
         for node in reversed(path):
             self.N[node] += 1
             self.Q[node] += reward
-            self.V[node] += leaf_val
+            if self.value_net:
+                self.V[node] += leaf_val
             reward = 1 - reward
 
     def _puct_select(self, node):
@@ -115,8 +115,11 @@ class MCTS:
             node.set_dist(self.policy_net)
         def puct(n):
             last_move_prob = node.dist.probs[n.last_move].item()
-            avg_reward = 0 if self.N[n] == 0 else ((1 - self.value_net_weight) * self.Q[n]
-                                                    + self.value_net_weight * self.V[n]) / self.N[n]
+            if self.value_net:
+                avg_reward = 0 if self.N[n] == 0 else ((1 - self.value_net_weight) * self.Q[n]
+                                                        + self.value_net_weight * self.V[n]) / self.N[n]
+            else:
+                avg_reward = 0 if self.N[n] == 0 else self.Q[n]/self.N[n]
             return avg_reward + (self.exploration_weight
                     * last_move_prob 
                     * math.sqrt(total_visits) / (1 + self.N[n]))
@@ -197,14 +200,16 @@ class Go_MCTS(go.Game):
 
     def get_move(self, policy: PolicyNet):
         move = self.dist_sample(policy)
+        #tries = 0 
         while not self.is_legal(move):
             move = self.dist_sample(policy) 
+            #if tries > 100: #abort
+            #    return -1
         return move
 
-    # Do not use until we figure out how to best terminate the game
     def is_game_over(self):
-        '''Terminate after MAX_TURNS''' 
-        return self.turn > MAX_TURNS
+        '''Terminate after MAX_TURNS or if last move is PASS''' 
+        return self.turn > MAX_TURNS or self.last_move == -1
 
     def set_dist(self, policy: PolicyNet):
         '''Set the probability distribution for this board'''

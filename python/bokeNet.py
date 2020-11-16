@@ -81,6 +81,46 @@ class ValueNet(nn.Module):
         return x.view(-1, 1) 
         
 
+class Conv2dUntiedBias(nn.Module):
+    def __init__(self, height, width, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1):
+        super(Conv2dUntiedBias, self).__init__()
+        kernel_size = _pair(kernel_size)
+        stride = _pair(stride)
+        padding = _pair(padding)
+        dilation = _pair(dilation)
+
+        if in_channels % groups != 0:
+            raise ValueError('in_channels must be divisible by groups')
+        if out_channels % groups != 0:
+            raise ValueError('out_channels must be divisible by groups')
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.padding = padding
+        self.dilation = dilation
+        self.groups = groups
+        self.weight = Parameter(torch.Tensor(
+                out_channels, in_channels // groups, *kernel_size))
+        self.bias = Parameter(torch.Tensor(out_channels, height, width))
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        n = self.in_channels
+        for k in self.kernel_size:
+            n *= k
+        stdv = 1. / sqrt(n)
+        self.weight.data.uniform_(-stdv, stdv)
+        self.bias.data.uniform_(-stdv, stdv)
+
+
+    def forward(self, input):
+        output = F.conv2d(input, self.weight, None, self.stride,
+                        self.padding, self.dilation, self.groups)
+        # add untied bias
+        output += self.bias.unsqueeze(0).repeat(input.size(0), 1, 1, 1)
+        return output
+
 class NinebyNineGames(Dataset):
     def __init__(self, path):
         '''read boards csv from path.'''
@@ -157,6 +197,7 @@ def features(game: go.Game):
         turn = np.ones((1,9,9), dtype = float)
     else:
         turn = np.zeros((1,9,9), dtype = float)
+
     last_mv = np.zeros(81, dtype = float)
     if isinstance(game.last_move, int) and game.last_move >= 0:
         last_mv[game.last_move] = 1.0
@@ -165,6 +206,7 @@ def features(game: go.Game):
     libs = np.array(game.get_liberties(), dtype = float).reshape(9,9)
     libs_after = np.zeros(81, dtype = float)
     caps = np.zeros(81, dtype = float)
+
     for sq_c in np.nonzero(legal)[0]:
         new_board, opp_captured = go.get_caps(go.place_stone(color, game.board,sq_c), sq_c, color)
         if opp_captured:
@@ -176,16 +218,19 @@ def features(game: go.Game):
     libs_after = libs_after.reshape(9,9)
     caps = caps.reshape(9,9)
     legal = legal.reshape(1,9,9)
+
+    def separate(arr):
+        '''Separate into 7 layers'''
+        out = np.zeros((7,9,9), dtype = float)
+        for i in range(6):
+            out[i, arr == i+1] = i+1
+        out[6, arr >6] = 7
+        return out 
+
     fts = np.vstack( [plyr, oppt, empty, turn, last_mv, legal,\
             separate(libs) , separate(libs_after) , separate(caps)])
     return torch.from_numpy(fts).float()
 
-def separate(arr):
-    out = np.zeros((7,9,9), dtype = float)
-    for i in range(6):
-        out[i, arr == i+1] = i+1
-    out[6, arr >6] = 7
-    return out 
 
 def policy_dist(policy: PolicyNet,
                 game: go.Game,
@@ -221,44 +266,4 @@ def policy_sample(policy: PolicyNet,
     m = Categorical(probs)
     return m.sample()
 
-
-class Conv2dUntiedBias(nn.Module):
-    def __init__(self, height, width, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1):
-        super(Conv2dUntiedBias, self).__init__()
-        kernel_size = _pair(kernel_size)
-        stride = _pair(stride)
-        padding = _pair(padding)
-        dilation = _pair(dilation)
-
-        if in_channels % groups != 0:
-            raise ValueError('in_channels must be divisible by groups')
-        if out_channels % groups != 0:
-            raise ValueError('out_channels must be divisible by groups')
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.kernel_size = kernel_size
-        self.stride = stride
-        self.padding = padding
-        self.dilation = dilation
-        self.groups = groups
-        self.weight = Parameter(torch.Tensor(
-                out_channels, in_channels // groups, *kernel_size))
-        self.bias = Parameter(torch.Tensor(out_channels, height, width))
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        n = self.in_channels
-        for k in self.kernel_size:
-            n *= k
-        stdv = 1. / sqrt(n)
-        self.weight.data.uniform_(-stdv, stdv)
-        self.bias.data.uniform_(-stdv, stdv)
-
-
-    def forward(self, input):
-        output = F.conv2d(input, self.weight, None, self.stride,
-                        self.padding, self.dilation, self.groups)
-        # add untied bias
-        output += self.bias.unsqueeze(0).repeat(input.size(0), 1, 1, 1)
-        return output
 

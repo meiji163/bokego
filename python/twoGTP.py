@@ -1,7 +1,9 @@
 from subprocess import Popen, PIPE
 import go
+from selfPlay import write_sgf
 from time import sleep
 import re
+
 class GTPprocess(object):
 
     def __init__(self, label, args):
@@ -54,8 +56,10 @@ class GTPplyr(object):
         mv = re.search('[ABCDEFGHJ]\d', message)
         if mv:
             return mv[0]
-        else:
-            return self.gtp_subprocess.close()
+        pass_mv = re.search('PASS', message)
+        if pass_mv:
+            return pass_mv[0]
+        return "Error: " + message 
 
     def showboard(self):
         self.gtp_subprocess.send("showboard\n")
@@ -69,83 +73,69 @@ class GTPplyr(object):
     def close(self):
         self.gtp_subprocess.close()
 
-def write_to_sgf(out_path, moves, score):
-    if score > 0:
-        res = f"RE[B+{score}]"
-    else:
-        res = f"RE[W+{-score}]"
-    print(res)
-    out = "(\n;PB[GnuGo]PW[Boke]" + res + "HA[0]KM[5.5]SZ[9]GM[1]\n"
-    turn = 0
-    for mv in moves: 
-        sq_c = go.squash(mv, alph = True)
-        plr =('B' if turn == 0 else 'W')
-        out += ";" + plr + "[" + chr(sq_c//9 +97) + chr(sq_c%9 +97) + "]\n"
-        turn = 1 - turn
-    out += ")"
-    with open(out_path, 'w') as f:
-        f.write(out)
-
     
 
 GNUGO = ["gnugo", "--chinese-rules","--mode", "gtp"]
 GNUGO_MCTS = ["gnugo", "--chinese-rules", "--mode", "gtp","--monte-carlo"]
-BOKE_B = ["python", "bokePlay.py", "--mode", "gtp", "-r", "200", "-c", "B"]
+BOKE_B = ["python", "bokePlay.py", "--mode", "gtp", "-r", "100", "-c", "B"]
 BOKE_W = ["python", "bokePlay.py", "--mode", "gtp", "-r", "200"]
 
-moves = []
-white = GTPplyr("white", BOKE_W)
-black = GTPplyr("black", GNUGO)
 
-black.name()
-black.version()
+if __name__ == "__main__":
+    white = GTPplyr("white", GNUGO)
+    black = GTPplyr("black", BOKE_B)
 
-white.name()
-white.version()
+    black.name()
+    black.version()
 
-black.boardsize(9)
-white.boardsize(9)
+    white.name()
+    white.version()
 
-black.komi(5.5)
-white.komi(5.5)
+    black.boardsize(9)
+    white.boardsize(9)
 
-black.clear_board()
-white.clear_board()
+    black.komi(5.5)
+    white.komi(5.5)
 
-first_pass = False
+    black.clear_board()
+    white.clear_board()
 
-moves = []
-while True:
-    vertex = black.genmove("black")
-    if vertex == "PASS":
-        break
-        if first_pass:
-            break
+    first_pass = False
+
+    moves = []
+    while True:
+        vertex = black.genmove("black")
+        if vertex == "PASS":
+            if first_pass:
+                break
+            else:
+                first_pass = True
         else:
-            first_pass = True
-    else:
-        first_pass = False
-        moves.append(vertex)
-    white.play("black", vertex)
-    white.showboard()
+            first_pass = False
+            moves.append(vertex)
+        white.play("black", vertex)
+        white.showboard()
 
-    vertex = white.genmove("white")
-    if vertex == "PASS":
-        break
-        if first_pass:
-            break
+        vertex = white.genmove("white")
+        if vertex == "PASS":
+            if first_pass:
+                break
+            else:
+                first_pass = True
         else:
-            first_pass = True
+            first_pass = False
+            moves.append(vertex)
+
+        white.showboard()
+        black.play("white", vertex)
+
+    score = float(re.findall("[BW]\+.+", white.final_score())[0])
+    if score > 0:
+        res = f"B+{score}"
     else:
-        first_pass = False
-        moves.append(vertex)
-
-    white.showboard()
-    black.play("white", vertex)
-
-write_to_sgf("boke_gnugo_6.sgf",moves, black.final_score())
-black.final_score()
-white.final_score()
-
-black.close()
-white.close()
+        res = f"W+{-score}"
+    write_sgf(moves, "boke_gnugo_6.sgf", B="Boke", W="GNUGO", result = res)
+    black.final_score()
+    white.final_score()
+    black.close()
+    white.close()
