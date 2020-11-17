@@ -1,14 +1,17 @@
 # Boke Go
 Boke is an open source Go engine for a 9x9 board.
 It uses the PUCT (Prediction + Upper Confidence Bound for Trees)
-variant of Monte Carlo Tree Search. The prediction is provided by a policy network trained on human games.
+variant of Monte Carlo Tree Search. The prediction is provided by a policy network trained on human games and selfplay games.
 
-The current version of Boke won 8/10 games against GnuGo 3.8.
+The current version of Boke won 10/10 games against GnuGo 3.8 with 100 rollouts per move.
+
+GnuGo (B) vs. Boke (W)
+![boke vs gnugo](https://media.giphy.com/media/T9E8NcDPFe5PAdmyxT/giphy.gif)
+
 
 ## Todo  
 * Add pass/resign
-* Add more input features to the policy net
-* Improve rollouts 
+* Improve/parallelize rollouts 
 * Port to C++
 
 ## Play Boke
@@ -30,12 +33,5 @@ optional arguments:
 ```
 **Warning**: rollouts are currently single-threaded and very slow. 
 
-GTP mode is supported to play on goban GUIs.
 
-GnuGo (B) vs. Boke (W)
 
-![boke vs gnugo](https://media.giphy.com/media/T9E8NcDPFe5PAdmyxT/giphy.gif)
-
-Boke vs. Boke
-
-![boke vs boke](https://media.giphy.com/media/jZxYkgEyDSkCd7QQRz/giphy.gif)
