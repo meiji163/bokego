@@ -39,6 +39,24 @@ def legal_sample(pi, game, device = DEV):
             return
     return move
 
+def write_board_sgf(game, out_path):
+    '''write board to sgf (move sequence not available)'''
+    out = "(;GM[1]RU[Chinese]HA[0]SZ[9]KM[5.5]\n"
+    W = "AW"
+    B = "AB"
+    for i in range(81): 
+        mv = game.board[i]
+        if mv == 'X':
+            x, y = chr(i//9 + 97), chr(i%9 +97)
+            B += f"[{x}{y}]" 
+        elif mv == 'O':
+            x, y = chr(i//9 + 97), chr(i%9 +97)
+            W += f"[{x}{y}]" 
+    turn = 'B' if game.turn%2 == 0 else 'W' 
+    out += B + '\n' + W + f"PL[{turn}])"
+    with open(out_path, 'w') as f:
+        f.write(out)
+
 def write_sgf(moves, out_path, B = None, W = None, result = None):
     '''Write minimal sgf for moves list to outpath'''
     out = f"(;GM[1]RU[Chinese]"
@@ -59,7 +77,7 @@ def write_sgf(moves, out_path, B = None, W = None, result = None):
 def gnu_score(game):
     '''Scores the game using gnugo opened in a subprocess'''
     temp = "/tmp/" + str(os.getpid())+".sgf" #put temp directory here
-    write_sgf(game.moves, temp) 
+    write_board_sgf(game, temp) 
     p =Popen(["gnugo", "--komi", "5.5", "--mode", "gtp", "--chinese-rules", "-l", temp], \
                     stdin = PIPE, stdout = PIPE)
     p.stdin.write("final_score\n".encode('utf-8'))

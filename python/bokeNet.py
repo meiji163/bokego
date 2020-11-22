@@ -188,7 +188,7 @@ def features(game: go.Game):
     oppt = np.copy(plyr) 
     turn_num = (1 if game.turn%2 == 0 else -1)
     color = (go.BLACK if turn_num == 1 else go.WHITE)
-    plyr[plyr == -turn_num] = 0
+    plyr[plyr != turn_num] = 0
     oppt[oppt == turn_num] = 0
     plyr *= turn_num 
     oppt *= -turn_num

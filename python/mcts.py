@@ -2,15 +2,16 @@ from collections import defaultdict
 import math
 import copy
 from random import choice, randrange
-from selfPlay import gnu_score
+from selfplay import gnu_score
 import time
 import torch
 
 from bokeNet import ValueNet, value, PolicyNet, policy_dist, features
 import go
 
-MAX_TURNS = 76
-EXPAND_THRESH = 10
+MAX_TURNS = 100 
+EXPAND_THRESH = 10 
+EXPAND_NUM = 20
 
 class MCTS:
     "Monte Carlo tree searcher. First rollout the tree then choose a move."
@@ -36,7 +37,7 @@ class MCTS:
             raise RuntimeError(f"choose called on terminal node {node}")
 
         if node not in self.children:
-            return node.find_random_child()
+            return node.find_random_child(self.policy_net)
 
         def score(n):
             if self.N[n] == 0:
@@ -46,6 +47,7 @@ class MCTS:
         # Choose most visited node
         best = max(self.children[node], key=score)
         self.winrate = self.Q[best]/self.N[best]
+        print( self.Q[best] , self.Q[best])
         return best
 
     def do_rollout(self, node, n = 1):
@@ -81,7 +83,7 @@ class MCTS:
         "Update the `children` dict with the children of `node`"
         if node in self.children:
             return  # already expanded
-        self.children[node] = node.find_children()
+        self.children[node] = node.find_children(self.policy_net)
 
     # Need to make this faster (ideally at least 10x)
     def _simulate(self, node):
@@ -89,8 +91,10 @@ class MCTS:
         invert_reward = not node.color
         while True:
             if node.terminal:
-                reward = node.reward()
+                reward = node.reward(gnu = True)
                 reward = invert_reward^reward
+                #print(node)
+                #print(reward)
                 return reward
             node = node.find_random_child(self.policy_net)
 
@@ -111,11 +115,11 @@ class MCTS:
         # First visit selects policy's top choice
         if total_visits == 0:
             total_visits = 1
-        if not node.dist:
+        if node.dist is None:
             node.set_dist(self.policy_net)
         def puct(n):
             last_move_prob = node.dist.probs[n.last_move].item()
-            if self.value_net:
+            if not self.value_net is None:
                 avg_reward = 0 if self.N[n] == 0 else ((1 - self.value_net_weight) * self.Q[n]
                                                         + self.value_net_weight * self.V[n]) / self.N[n]
             else:
@@ -162,12 +166,12 @@ class Go_MCTS(go.Game):
                        color=self.color, last_move=self.last_move,
                        komi = self.komi, device = self.device)
     
-    def find_children(self):
+    def find_children(self, policy):
         '''Returns a set of boards (Go_MCTS objects) derived from legal
         moves'''
         if self.terminal:
             return set()      
-        return {self.make_move(i) for i in self.get_all_legal_moves()}
+        return {self.make_move(i) for i in self.topk_moves(policy, EXPAND_NUM) if self.is_legal(i)}
     
     def find_random_child(self, policy: PolicyNet):
         '''Draws legal move from distribution given by policy. If no
@@ -178,9 +182,15 @@ class Go_MCTS(go.Game):
             return self # Game is over; no moves can be made
         return self.make_move(self.get_move(policy)) 
 
-    def reward(self):
+    def topk_moves(self, policy: PolicyNet, k):
+        if self.dist is None:
+            self.set_dist()
+        topk = torch.topk(self.dist.probs, k = k).indices
+        return topk.tolist()
+
+    def reward(self, gnu = False):
         '''Returns 1 if Black wins, 0 if White wins.'''
-        return int(self.score() > 0)
+        return gnu_score(self) if gnu else int(self.score() > 0)
 
     def make_move(self, index):
         '''Returns a copy of the board (Go_MCTS object) after the move
@@ -190,21 +200,20 @@ class Go_MCTS(go.Game):
         game_copy.last_move = index
         # It's now the other player's turn
         game_copy.color = not self.color
-        # Check if the move ended the game
         game_copy.terminal = game_copy.is_game_over()
         return game_copy
 
-    # VERY expensive call, need improve this.
-    def get_all_legal_moves(self):
-        return [i for i in range(go.N ** 2) if self.is_legal(i)]
-
     def get_move(self, policy: PolicyNet):
+        '''Sample a move from the policy. If that is illegal or fills player's own eye, find a different
+        move from the top policy moves.''' 
         move = self.dist_sample(policy)
-        #tries = 0 
-        while not self.is_legal(move):
-            move = self.dist_sample(policy) 
-            #if tries > 100: #abort
-            #    return -1
+        color = go.BLACK if self.color else go.WHITE
+        k = 0
+        while not self.is_legal(move) or go.possible_eye(self.board, move) == color:
+            if k >= 81: return -1
+            moves = self.topk_moves(policy, 81)
+            move = moves[k]
+            k += 1 
         return move
 
     def is_game_over(self):
@@ -219,7 +228,7 @@ class Go_MCTS(go.Game):
     
     def dist_sample(self, policy: PolicyNet):
         '''Sample a move from the policy distribution'''
-        if not self.dist:
+        if self.dist is None:
             self.set_dist(policy)
         return self.dist.sample().item()
 

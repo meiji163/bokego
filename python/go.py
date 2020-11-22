@@ -5,7 +5,6 @@ N = 9
 WHITE, BLACK, EMPTY = 'O', 'X', '.'
 EMPTY_BOARD = EMPTY*(N**2) 
 PASS = -1
-
 class Game():
     '''go.Game: a class to represent a go game. The board is represented as a length N^2 string
     using "squashed coordinates" 0,1,...,N^2-1. PASS is -1
@@ -55,7 +54,7 @@ class Game():
 
     def play_move(self, sq_c = None, testing = False):
         '''play move from self.moves. If a coordinate is given that is played instead.
-        optional: return a list of captured stones after move is played.'''
+        optional: testing = True stops board from being modified''' 
         if sq_c == None:
             if self.turn >= len(self):
                 print("No moves to play.")
@@ -106,10 +105,12 @@ class Game():
             empty = board.index(EMPTY)
             empties, borders = flood_fill(board, empty)
             bd_list = [board[sq_b] for sq_b in borders]
-            if bd_list.count(BLACK) > 2*bd_list.count(WHITE):
+            if BLACK in bd_list and not WHITE in bd_list: 
                 border_color = BLACK
-            else:
+            elif WHITE in bd_list and not BLACK in bd_list:
                 border_color = WHITE
+            else:
+                border_color = '?'
             board = bulk_place_stones(border_color, board, borders)
             board = bulk_place_stones(border_color, board, empties)
         return board.count(BLACK) - (board.count(WHITE) + self.komi)
@@ -142,6 +143,8 @@ class Game():
 def squash(c, alph = False):
     '''squash converts coordinate pair to single integer 0 <= n < N^2.
     alph = True squashes a letter-number coordinate string '''
+    if isinstance(c, list):
+        return [squash(b) for b in c]
     if alph:
         #Letters skip I
         y = 8 if c[0] == 'J' else ord(c[0]) - 65 
@@ -151,8 +154,8 @@ def squash(c, alph = False):
     return N * c[0] + c[1]
 
 def unsquash(sq_c, alph = False):
-    if type(sq_c) == list:
-        return [divmod(sq_b, N) for sq_b in sq_c ]
+    if isinstance(sq_c, list): 
+        return [unsquash(sq_b) for sq_b in sq_c]
     else:
         c = divmod(sq_c, N)
         if alph:
@@ -162,13 +165,6 @@ def unsquash(sq_c, alph = False):
 
 def is_on_board(c):
     return c[0] % N == c[0] and c[1] % N == c[1]
-
-def get_valid_neighbors(sq_c):
-    x, y = unsquash(sq_c)
-    possible_neighbors = ((x+1, y), (x-1, y), (x, y+1), (x, y-1))
-    return [squash(n) for n in possible_neighbors if is_on_board(n)]
-
-NEIGHBORS = [get_valid_neighbors(sq_c) for sq_c in range(N*N)]
 
 def flood_fill(board, sq_c):
     '''Flood fill to find the connected component containing sq_c and its boundary'''
@@ -208,6 +204,10 @@ def get_caps(board, sq_c, color):
 
 class IllegalMove(Exception): pass
 
+NEIGHBORS = [squash( list( filter(is_on_board, [(x+1, y), (x-1, y), (x, y+1), (x, y-1)]))) \
+                for x in range(N) for y in range(N)] 
+DIAGONALS = [squash( list( filter(is_on_board, [(x+1,y+1), (x+1, y-1), (x-1, y-1), (x-1, y-1)]))) \
+                for x in range(N) for y in range(N)] 
 #Helper functions
 def place_stone(color, board, sq_c):
     return board[:sq_c] + color + board[sq_c+1:]
@@ -250,7 +250,7 @@ def play_move_incomplete(board, sq_c, color):
     return board
 
 def possible_ko(board, sq_c):
-    '''Check if sq_c is surrounded on all sides by 1 color, and return that color'''
+    '''Check if sq_c is surrounded by one color, and return that color'''
     if board[sq_c] != EMPTY: return None
     neighbor_colors = { board[sq_n] for sq_n in NEIGHBORS[sq_c]}
     if len(neighbor_colors) == 1 and not EMPTY in neighbor_colors:
@@ -258,3 +258,18 @@ def possible_ko(board, sq_c):
     else:
         return None
 
+def possible_eye(board, sq_c):
+    color = possible_ko(board, sq_c)
+    if color is None:
+        return None
+    diagonal_faults = 0
+    diagonals = DIAGONALS[sq_c]
+    if len(diagonals) < 4:
+        diagonal_faults += 1
+    for d in diagonals:
+        if not board[d] in (color, EMPTY):
+            diagonal_faults += 1
+    if diagonal_faults > 1:
+        return None
+    else:
+        return color

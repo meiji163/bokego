@@ -12,7 +12,7 @@ import argparse
 from time import sleep
 
 parser = argparse.ArgumentParser(description = "Play against Boke")
-parser.add_argument("-p", metavar="PATH", type = str, dest = 'p', help = "path to policy", default = "v0.2/RL_policy_2.pt")
+parser.add_argument("-p", metavar="PATH", type = str, dest = 'p', help = "path to policy", default = "v0.2/RL_policy_29.pt")
 parser.add_argument("-v", metavar="PATH", type = str, dest = 'v', help = "path to value net", default = "v0.2/value_2020-11-13_6.pt")
 parser.add_argument("-c", type = str, action = 'store', choices = ['W','B'], dest = 'c', help = "Boke's color", default = ['W'])
 parser.add_argument("-r", nargs = 1, metavar="ROLLOUTS", action = 'store', type = int, default = [100], dest = 'r', help = "number of rollouts per move")
@@ -61,7 +61,7 @@ def gtp(tree, policy, device):
         elif cmd[0] == "protocol_version":
             out = "2"
         elif cmd[0] == "version":
-            out = "0.1-alpha"
+            out = "0.2-alpha"
         elif cmd[0] == "known_command":
             if len(cmd) == 1:
                 out = "false"
@@ -108,7 +108,8 @@ def gtp(tree, policy, device):
                 if turn != board.turn%2:
                     print("?{} It is {}'s turn\n\n".format(cmd_id, cmd[1]), end='') 
                 else:
-                    tree.do_rollout(board, NUM_ROLLOUTS)
+                    R = NUM_ROLLOUTS//10 if board.turn < 12 else NUM_ROLLOUTS
+                    tree.do_rollout(board, R) 
                     board = tree.choose(board)
                     out = go.unsquash(board.last_move, alph = True)
         elif cmd[0] == "name":
@@ -135,13 +136,13 @@ if  __name__ == "__main__":
     pi.load_state_dict(checkpt["model_state_dict"])
     pi.to(device)
     pi.eval()
-    val = ValueNet()
-    checkpt = load(args.v, map_location = device)
-    val.load_state_dict(checkpt["model_state_dict"])
-    val.to(device)
-    val.eval()
+    #val = ValueNet()
+    #checkpt = load(args.v, map_location = device)
+    #val.load_state_dict(checkpt["model_state_dict"])
+    #val.to(device)
+    #val.eval()
     board = Go_MCTS(device = device)
-    tree = MCTS(value_net = val, policy_net=pi, exploration_weight = 1)
+    tree = MCTS(policy_net=pi, exploration_weight = 1)
     set_grad_enabled(False)
 
     if args.mode == 'gtp':
@@ -174,16 +175,24 @@ if  __name__ == "__main__":
         elif uin == 'q':
             sys.exit() 
         else:
+            if board.turn > 60 and tree.winrate < 0.05:
+                print("Boke resigns.")
+                sys.exit()
             try:
                 done = False
                 board = board.make_move(go.squash(uin, alph = True))
                 clear()
                 print(board)
+
                 t = Thread(target = loading)
                 t.start() 
-                tree.do_rollout(board,NUM_ROLLOUTS)
+                
+                rolls = 13 if board.turn < 13 else NUM_ROLLOUTS
+                tree.do_rollout(board,rolls)
                 done = True
                 board = tree.choose(board)
+            except go.IllegalMove:
+                print("Illegal move")
             except: 
                 print("Enter coordinate to play a move\nEnter h to show hint\nEnter q to quit" )
                 sleep(3)
