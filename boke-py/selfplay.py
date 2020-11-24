@@ -13,7 +13,7 @@ import torch
 from torch.distributions.categorical import Categorical
 
 DEV= torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-MAX_TURNS = 85
+MAX_TURNS = 84
 
 def playout(game: go.Game, pi_1, pi_2, device = DEV):
     '''Playout game between policies pi_1 and pi_2, with pi_1 playing black and pi_2 playing white.''' 
@@ -34,12 +34,15 @@ def playout(game: go.Game, pi_1, pi_2, device = DEV):
 def legal_sample(pi, game: go.Game, device = DEV):
     move = policy_sample(pi, game, device)
     tries = 0
-    while not game.is_legal(move.item()) or go.possible_eye(game.board, move.item()):
-        move = policy_sample(pi, game, device )
-        tries += 1
-        if tries > 10:
-            #abort if policy selects no reasonable move
+    color = go.BLACK if game.turn%2 == 0 else go.WHITE
+    k = 0
+    while not game.is_legal(move.item()):
+        if k == 0:
+            moves = torch.topk(policy_dist(pi, game, device).probs, k = 20).indices
+        elif k > 19:
             return
+        move = moves[k]
+        k += 1
     return move
 
 def write_board_sgf(game: go.Game, out_path):
@@ -149,6 +152,9 @@ def reinforce(pi, pi_opp, optimizer, train_color, **kwargs):
         for i in range(bs):
             loss = 0.0
             g = go.Game(moves = games[i])
+            if len(g) < MAX_TURNS - 5:
+                print(len(g))
+                continue
             reward = 1 if (results[i] and train_color == "black")\
                         or (not results[i] and train_color == "white")  else -1
             #replay the game to calculate the loss
@@ -197,12 +203,14 @@ if __name__ == "__main__":
     n_opps = len(policy_paths) - 1
     print(f"Opponent pool size: {n_opps}")
     checkpt = torch.load(f"v0.2/RL_policy_{n_opps}.pt",map_location = DEV) 
-    optimizer.load_state_dict(checkpt["optimizer_state_dict"])
-    #move optimizer states to GPU
-    for state in optimizer.state.values():
-        for k, t in state.items():
-            if torch.is_tensor(t):
-                state[k] = t.cuda()
+    if "optimizer_state_dict" in checkpt:
+        optimizer.load_state_dict(checkpt["optimizer_state_dict"])
+        #move optimizer states to GPU
+        for state in optimizer.state.values():
+            for k, t in state.items():
+                if torch.is_tensor(t):
+                    state[k] = t.cuda()
+
     pi.load_state_dict(checkpt["model_state_dict"])
     pi.to(DEV)
     pi.train()
@@ -237,8 +245,8 @@ if __name__ == "__main__":
             p.join()
         
         with open(args.f, 'a+') as f:
-            f.write(f"\n{args.b*args.n} games v. Policy {opp_id}")
-            f.write(','.join([str(w) for w in stat_list]))
+            f.write(f"Policy {n_opps} vs. Policy {opp_id}\n")
+            f.write(','.join([str(w) for w in stat_list]) + '\n')
             
         n_opps += 1
         out_path = os.getcwd() + f"/v0.2/RL_policy_{n_opps}.pt"
