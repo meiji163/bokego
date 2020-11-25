@@ -13,7 +13,7 @@ import torch
 from torch.distributions.categorical import Categorical
 
 DEV= torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-MAX_TURNS = 84
+MAX_TURNS = 85
 
 def playout(game: go.Game, pi_1, pi_2, device = DEV):
     '''Playout game between policies pi_1 and pi_2, with pi_1 playing black and pi_2 playing white.''' 

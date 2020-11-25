@@ -42,14 +42,7 @@ class PolicyNet(nn.Module):
         x = x.view(-1, 81)
         return x 
 
-    def num_flat_features(self, x):
-        size = x.size()[1:]
-        num_features = 1
-        for s in size:
-            num_features *= s
-        return num_features
-
-class ValueNet(nn.Module):
+class ValueNet(PolicyNet):
     '''27 9x9 input features
     1 5x5 convolution: 9x9 -> 9x9
     4 3x3 convolutions: 9x9 -> 9x9
@@ -59,26 +52,21 @@ class ValueNet(nn.Module):
     '''
     def __init__(self):
         super(ValueNet, self).__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(27,64,5, padding = 2),
-            nn.ReLU(),
-            nn.Conv2d(64, 128,3, padding = 1),
-            nn.ReLU(),
-            nn.Conv2d(128, 128,3, padding = 1),
-            nn.ReLU(),
-            nn.Conv2d(128, 128, 3, padding = 1),
-            nn.ReLU(),
-            nn.Conv2d(128, 128, 3, padding = 1),
-            nn.ReLU(),
-            nn.Conv2d(128, 128, 3, padding = 1))
-        self.lin1 = nn.Linear(128*9*9, 1)
+        self.lin = nn.Linear(9*9, 1)
         self.relu = nn.ReLU()
+        self.tanh = nn.Tanh()
+
+    def load_policy_dict(self, policy_dict):
+        '''load convolution weights from the PolicyNet'''
+        new_dict = self.state_dict()
+        new_dict.update(policy_dict)
+        self.load_state_dict(new_dict)
 
     def forward(self, x):
         x = self.relu(self.conv(x))
-        x = x.view(-1, 128*9*9) 
-        x = self.lin1(x)
-        return x.view(-1, 1) 
+        x = x.view(-1, 9*9) 
+        x = self.tanh(self.lin(x))
+        return x
         
 
 class Conv2dUntiedBias(nn.Module):
@@ -132,14 +120,12 @@ class NinebyNineGames(Dataset):
         return len(self.boards)
 
     def __getitem__(self, idx):
-        board, ko, turn, last, res = self.boards.iloc[idx]
-        g = go.Game(board = board, turn = turn, ko = ko, last_move = last)
-        #if (res == 'B' and turn%2 == 0) or (res == 'W' and turn%2 == 1):
-        #reward = 1 if current player wins the game, -1 if he loses.
-        #    reward = 1.0
-        #else:
-        #    reward = -1.0
-        return features(g), res 
+        board, last, ko, val = self.boards.iloc[idx]
+        g = go.Game(board = board, ko = ko, last_move = last)
+        turn = 0 if g.board[last] == go.BLACK else 1 
+        g.turn = turn
+        res = 1.0 if val else -1.0
+        return features(g), torch.Tensor([res]) 
 
     @staticmethod
     def convert_type(x):

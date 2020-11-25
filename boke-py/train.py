@@ -21,18 +21,19 @@ if __name__ == "__main__":
     #validloader = DataLoader(validation_set, batch_size = 128, shuffle = True, num_workers = 10)
     print("Number of board positions: {}".format(len(data)))
 
-    #v = ValueNet()
-    #v.cuda()
-    #err = nn.MSELoss()
-    pi = PolicyNet()
-    pi.cuda()
-    err = nn.CrossEntropyLoss()
+    v = ValueNet()
+    v.cuda()
+    err = nn.MSELoss()
+    #pi = PolicyNet()
+    #pi.cuda()
+    #err = nn.CrossEntropyLoss()      
+    err = nn.MSELoss()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu") 
-    optimizer = torch.optim.Adam(pi.parameters())
+    optimizer = torch.optim.Adam(v.parameters())
     if args.c:
         print("Loading checkpoint...")
         checkpt = torch.load(args.c[0], map_location = device)
-        pi.load_state_dict(checkpt["model_state_dict"] )
+        v.load_state_dict(checkpt["model_state_dict"] )
         optimizer.load_state_dict(checkpt["optimizer_state_dict"]) 
         epochs_trained = checkpt["epoch"]
 
@@ -40,9 +41,11 @@ if __name__ == "__main__":
             for k, t in state.items():
                 if torch.is_tensor(t):
                     state[k] = t.cuda()
-        #v.train()
-        pi.train()
+        v.train()
+        #pi.train()
     else:
+        policy = torch.load("v0.2/RL_policy_40.pt", map_location = device)
+        v.load_policy_dict(policy["model_state_dict"])
         epochs_trained = 0 
 
     epochs = args.e[0] 
@@ -55,7 +58,7 @@ if __name__ == "__main__":
             inputs, moves = inputs.to(device), moves.to(device) 
             
             optimizer.zero_grad()
-            outputs = pi(inputs)
+            outputs = v(inputs)
             
             #backprop
             loss = err(outputs, moves) 
@@ -81,7 +84,7 @@ if __name__ == "__main__":
                # pi.train()
      
         epochs_trained += 1
-        out_path = os.getcwd() + "/policy_" \
+        out_path = os.getcwd() + "/value" \
                     + str(date.today()) + "_" + str(epochs_trained)+ ".pt"  
-        torch.save({"model_state_dict": pi.state_dict(), "optimizer_state_dict": optimizer.state_dict(), "epoch": epochs_trained}, out_path)
+        torch.save({"model_state_dict": v.state_dict(), "optimizer_state_dict": optimizer.state_dict(), "epoch": epochs_trained}, out_path)
 
