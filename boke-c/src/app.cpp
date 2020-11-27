@@ -11,25 +11,23 @@
 #include<random>
 
 int main(int argc, const char* argv[]) {
-  if (argc != 2) {
-    std::cerr << "usage: example-app <path-to-exported-script-module>\n";
+  if (argc != 3) {
+    std::cerr << "usage: app <path-to-SL-policy> <path-to-RL-policy>\n";
     return -1;
   }
 
-
-  torch::jit::script::Module module;
+  torch::jit::script::Module pi, pi_r;
   try {
-    module = torch::jit::load(argv[1]);
+    pi = torch::jit::load(argv[1]);
+    pi_r = torch::jit::load(argv[2]);
   }
   catch (const c10::Error& e) {
     std::cerr << "error loading the model\n";
     return -1;
   }
-
   Board game = Board(9);
-  PolicyNet model = PolicyNet();
 
-  MCTS ts = MCTS(20, 1.0, module);
+  MCTS ts = MCTS(5.0, pi, pi_r);
   ts._root->_lastmove = -1;
   ts._root->_turn = 0;
 
@@ -43,13 +41,15 @@ int main(int argc, const char* argv[]) {
     ts.play(ts._root, 9*(i-1)+j-1);
     ts._root->print();
     if(turn <= 10){
-      ts.rollout(ts._root, 20);
+      ts.rollout(ts._root, 200);
     }else{
-      ts.rollout(ts._root, 1000);
+      ts.rollout(ts._root, 500);
     }
     turn++;
     ts.choose();
     ts._root->print();
+    std::cout << "Visits: " << ts._root->_visited << std::endl;
+    std::cout << "Rewards: " << ts._root->_reward << std::endl;
   }
   //auto end = std::chrono::high_resolution_clock::now();
 

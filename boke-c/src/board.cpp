@@ -459,22 +459,32 @@ int Board::convertCoord(int i, int j){
 }
 
 void Board::createSGF(std::string file_path){
+    //does not keep track of move order
     std::ofstream os;
     os.open(file_path);
-    os << "(;GM[1]SZ[9]KM[7]RU[Chinese]\n";
+    os << "(;GM[1]SZ[9]KM[5.5]RU[Chinese]\n";
+    std::string black = "AB";
+    std::string white = "AW";
+    std::string plyr = (this->turn)%2 == 0 ? "PL[B]" : "PL[W]";
     char p1,p2;
     for(int i = 1; i<=9; i++){
         for(int j =1; j<=9; j++){
             p1 = i + 96;
             p2 = j + 96;
-            if(this->board[i][j] == WHITE){
-                os << ";W[" << p1 << p2 << "]";
-            }else if(this->board[i][j] == BLACK){
-                os << ";B[" << p1 << p2 << "]";
+            if(this->board[i][j] == BLACK){
+                black += "[";
+                black += p1;
+                black += p2;
+                black += "]";
+            }else if(this->board[i][j] == WHITE){
+                white += "[";
+                white += p1;
+                white += p2;
+                white += "]";
             }
         }
     }
-    os <<")";
+    os << black << "\n" << white << turn << plyr << ")";
     os.close();
 }
 
@@ -520,7 +530,7 @@ int Board::getPos(int mv){
 
 int Board::getScore(){
     this->createSGF("./temp.sgf");
-    std::string cm = "gnugo --score --chinese-rules --komi 5.5 -l sgf temp.sgf";
+    std::string cm = "gnugo --score --chinese-rules -l temp.sgf";
     std::array<char, 128> buffer;
     std::string result;
     std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cm.c_str(), "r"), pclose);
