@@ -36,13 +36,12 @@ class PolicyNet(nn.Module):
                 nn.Conv2d(128,128,3, padding = 1),
                 nn.ReLU(),
                 Conv2dUntiedBias(9,9,128,1,1))
-
     def forward(self, x):
         x = self.conv(x)
         x = x.view(-1, 81)
         return x 
 
-class ValueNet(PolicyNet):
+class ValueNet(nn.Module):
     '''27 9x9 input features
     1 5x5 convolution: 9x9 -> 9x9
     4 3x3 convolutions: 9x9 -> 9x9
@@ -52,7 +51,33 @@ class ValueNet(PolicyNet):
     '''
     def __init__(self):
         super(ValueNet, self).__init__()
-        self.lin = nn.Linear(9*9, 1)
+        self.conv = nn.Sequential(
+                nn.Conv2d(27,128,5, padding = 2),
+                nn.BatchNorm2d(128),
+                nn.ReLU(),
+                nn.Conv2d(128 ,128,3, padding =1),
+                nn.BatchNorm2d(128),
+                nn.ReLU(),
+                nn.Conv2d(128,128,3, padding = 1),
+                nn.BatchNorm2d(128),
+                nn.ReLU(),
+                nn.Conv2d(128,128,3, padding = 1),
+                nn.BatchNorm2d(128),
+                nn.ReLU(),
+                nn.Conv2d(128,128,3, padding = 1),
+                nn.BatchNorm2d(128),
+                nn.ReLU(),
+                nn.Conv2d(128,128,3, padding = 1),
+                nn.BatchNorm2d(128), 
+                nn.ReLU(),
+                nn.Conv2d(128,128,3, padding = 1),
+                nn.BatchNorm2d(128), 
+                nn.ReLU(),
+                Conv2dUntiedBias(9,9,128,1,1))
+        self.lin1 = nn.Linear(81,64)
+        self.lin2 = nn.Linear(64,1)
+        self.bn = nn.BatchNorm2d(1) 
+        self.lin_bn = nn.BatchNorm1d(64)
         self.relu = nn.ReLU()
         self.tanh = nn.Tanh()
 
@@ -63,11 +88,10 @@ class ValueNet(PolicyNet):
         self.load_state_dict(new_dict)
 
     def forward(self, x):
-        x = self.relu(self.conv(x))
-        x = x.view(-1, 9*9) 
-        x = self.tanh(self.lin(x))
-        return x
-        
+        x = self.relu(self.bn(self.conv(x)))
+        x = x.view(-1, 81)
+        x = self.relu(self.lin_bn(self.lin1(x)))
+        return self.tanh(self.lin2(x))
 
 class Conv2dUntiedBias(nn.Module):
     def __init__(self, height, width, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1):
@@ -120,11 +144,11 @@ class NinebyNineGames(Dataset):
         return len(self.boards)
 
     def __getitem__(self, idx):
-        board, last, ko, val = self.boards.iloc[idx]
+        board, ko, last, val = self.boards.iloc[idx]
         g = go.Game(board = board, ko = ko, last_move = last)
-        turn = 0 if g.board[last] == go.BLACK else 1 
+        turn = 1 if g.board[last] == go.BLACK else 0
         g.turn = turn
-        res = 1.0 if val else -1.0
+        res = -1.0 if val else 1.0
         return features(g), torch.Tensor([res]) 
 
     @staticmethod

@@ -8,7 +8,7 @@ from datetime import date
 import argparse 
 
 if __name__ == "__main__":    
-    parser = argparse.ArgumentParser(description = "training script for Boke policy")
+    parser = argparse.ArgumentParser(description = "Supervise learning training script")
     parser.add_argument("-d", metavar="DATA", type = str, nargs=1, help = "path to csv", required = True)
     parser.add_argument("-c", metavar="CHECKPOINT", type = str, nargs = 1, help = "path to saved torch model")
     parser.add_argument("-e", metavar="EPOCHS", type = int, nargs =1, help = "number of epochs", default = [1])
@@ -16,20 +16,20 @@ if __name__ == "__main__":
     
     print("Loading data...")
     data = NinebyNineGames(args.d[0])
-    dataloader = DataLoader(data, batch_size = 64, shuffle = True, num_workers = 12)
+    dataloader = DataLoader(data, batch_size = 32, shuffle = True, num_workers = 8) 
     #validation_set = NinebyNineGames("/home/jupyter/BokeGo/data/validation.csv") 
     #validloader = DataLoader(validation_set, batch_size = 128, shuffle = True, num_workers = 10)
     print("Number of board positions: {}".format(len(data)))
 
     v = ValueNet()
     v.cuda()
+    v.train()
     err = nn.MSELoss()
     #pi = PolicyNet()
     #pi.cuda()
     #err = nn.CrossEntropyLoss()      
-    err = nn.MSELoss()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu") 
-    optimizer = torch.optim.Adam(v.parameters())
+    optimizer = torch.optim.Adam(v.parameters(), lr = 0.01)
     if args.c:
         print("Loading checkpoint...")
         checkpt = torch.load(args.c[0], map_location = device)
@@ -44,13 +44,13 @@ if __name__ == "__main__":
         v.train()
         #pi.train()
     else:
-        policy = torch.load("v0.2/RL_policy_40.pt", map_location = device)
-        v.load_policy_dict(policy["model_state_dict"])
+        #policy = torch.load("v0.2/RL_policy_50.pt", map_location = device)
+        #v.load_policy_dict(policy["model_state_dict"])
         epochs_trained = 0 
 
     epochs = args.e[0] 
-
     for epoch in range(epochs):
+        losses = []
         print("Epoch: {}".format(epochs_trained + 1))
         running_loss = 0.0
         for i, data in tqdm(enumerate(dataloader,0)):
@@ -66,8 +66,9 @@ if __name__ == "__main__":
             optimizer.step()
         
             running_loss += loss.item()
-            if i%4000 == 3999:
+            if i%1000 == 999:
                 print(" Loss: ", running_loss)
+                losses.append(running_loss)
                 running_loss = 0.0
                 #pi.eval()
                 #with torch.no_grad():
@@ -87,4 +88,6 @@ if __name__ == "__main__":
         out_path = os.getcwd() + "/value" \
                     + str(date.today()) + "_" + str(epochs_trained)+ ".pt"  
         torch.save({"model_state_dict": v.state_dict(), "optimizer_state_dict": optimizer.state_dict(), "epoch": epochs_trained}, out_path)
-
+        with open('stats.txt', 'a+') as f:
+            f.write(f"Epoch: {epoch}\n")
+            f.write(','.join([format(n, '.3f') for n in losses]) + '\n')

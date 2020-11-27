@@ -13,7 +13,7 @@ import torch
 from torch.distributions.categorical import Categorical
 
 DEV= torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-MAX_TURNS = 85
+MAX_TURNS = 80
 
 def playout(game: go.Game, pi_1, pi_2, device = DEV):
     '''Playout game between policies pi_1 and pi_2, with pi_1 playing black and pi_2 playing white.''' 
@@ -150,11 +150,10 @@ def reinforce(pi, pi_opp, optimizer, train_color, **kwargs):
 
         wins = 0 
         for i in range(bs):
-            loss = 0.0
+            loss = 0.0 
             g = go.Game(moves = games[i])
             if len(g) < MAX_TURNS - 5:
                 print(len(g))
-                continue
             reward = 1 if (results[i] and train_color == "black")\
                         or (not results[i] and train_color == "white")  else -1
             #replay the game to calculate the loss
