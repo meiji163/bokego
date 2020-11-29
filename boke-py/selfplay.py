@@ -6,14 +6,15 @@ from glob import glob
 from tqdm import trange
 from numpy.random import randint
 from copy import deepcopy
-from bokeNet import PolicyNet, policy_sample, policy_dist
+from bokeNet import PolicyNet, policy_sample, policy_dist, features
 from subprocess import Popen, PIPE
 import multiprocessing as mp
 import torch
 from torch.distributions.categorical import Categorical
 
 DEV= torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-MAX_TURNS = 80
+SOFTMAX = torch.nn.Softmax(dim = 1)
+MAX_TURNS = 80 
 
 def playout(game: go.Game, pi_1, pi_2, device = DEV):
     '''Playout game between policies pi_1 and pi_2, with pi_1 playing black and pi_2 playing white.''' 
@@ -25,25 +26,39 @@ def playout(game: go.Game, pi_1, pi_2, device = DEV):
             break 
         else:
             game.play_move(mv1.item())
+        
         mv2 = legal_sample(pi_2, game, device)        
         if mv2 is None:
             break 
         else:
             game.play_move(mv2.item())
 
-def legal_sample(pi, game: go.Game, device = DEV):
-    move = policy_sample(pi, game, device)
-    tries = 0
+def legal_sample(pi, game: go.Game, return_fts = False, device = DEV):
+    '''Sample legal move from policy to play in board position `game`.
+    Returns torch.tensor containing coordinate 0-80 
+    args:
+        pi: PolicyNet for sampling
+        game: go.Game in board position to play from
+    optional:
+        return_fts: if True, return the input features 
+        device: torch.device'''
+    fts = features(game)
+    move = policy_sample(pi, game, device, fts = fts)
     color = go.BLACK if game.turn%2 == 0 else go.WHITE
+    tries = 0
     k = 0
-    while not game.is_legal(move.item()):
+    #Don't play illegal move or fill own eyes
+    while not game.is_legal(move.item()) or go.possible_eye(game.board, move.item()) == color:
         if k == 0:
-            moves = torch.topk(policy_dist(pi, game, device).probs, k = 20).indices
-        elif k > 19:
-            return
+            moves = torch.topk(policy_dist(pi, game, device, fts = fts).probs, k = 81).indices
+        elif k > 80:
+            move, fts = None, None
+            break
         move = moves[k]
         k += 1
-    return move
+    if return_fts:
+        return move, fts
+    return move 
 
 def write_board_sgf(game: go.Game, out_path):
     '''write board to sgf (move sequence not available)'''
@@ -111,15 +126,50 @@ def gnu_score(game):
         return 1 if 'B' in res[0] else 0 
     return
 
-def self_play(pi1, pi2, num_games, device = DEV):
+def self_play(pi_1, pi_2, num_games, get_fts_col, device = DEV):
+    '''Play `num_games` between pi_1 and pi_2. Returns list of game moves, list of results,
+    and list of inputs features for the specified color
+    args:
+        pi_1: PolicyNet that plays black
+        pi_2: PolicyNet that plays white
+        get_fts_col: color of player to get input features for -- "black" or "white" '''
     games = []
     results = []
-    for n in range(num_games):
-        g = go.Game()
-        playout(g, pi1, pi2, device)        
-        games.append(g.moves)
-        results.append(gnu_score(g))
-    return games, results
+    fts_list = []
+    for _ in range(num_games):
+        game = go.Game()
+        game_fts = []
+        while True:
+            if game.turn > MAX_TURNS:
+                break
+            if get_fts_col == "black":
+                mv1, fts = legal_sample(pi_1, game, return_fts = True)
+                if fts is not None:
+                    game_fts.append(fts) 
+            else:
+                mv1 = legal_sample(pi_1, game)
+
+            if mv1 is None:
+                break 
+            else:
+                game.play_move(mv1.item())
+            
+            if get_fts_col == "white":
+                mv2, fts = legal_sample(pi_2, game, return_fts = True)        
+                if fts is not None:
+                    game_fts.append(fts)
+            else:
+                mv2 = legal_sample(pi_2, game)
+
+            if mv2 is None:
+                break 
+            else:
+                game.play_move(mv2.item())
+        fts_list.append(torch.stack(game_fts))
+        games.append(game.moves)
+        results.append(gnu_score(game))
+
+    return games, results, fts_list
 
 def reinforce(pi, pi_opp, optimizer, train_color, **kwargs):
     '''Implements the REINFORCE policy gradient descent algorithm using selfplay
@@ -129,12 +179,12 @@ def reinforce(pi, pi_opp, optimizer, train_color, **kwargs):
         optimizer: torch.optimizer for pi
         train_color: color pi plays -- "black" or "white"
     kwargs:
-        n_itrs: number of iterations to train (default 60)
+        n_itrs: number of iterations to train (default 64)
         bs: batch size of each iteration (default 16)
         device: torch.device for pi and pi_opp (default DEV) 
         stats: list to write winrate stats to
         '''
-    n_itrs = kwargs.get("n_itrs", 60)
+    n_itrs = kwargs.get("n_itrs", 64)
     bs = kwargs.get("bs", 16)
     device = kwargs.get("device", DEV)
     stats = kwargs.get("stats")
@@ -142,32 +192,28 @@ def reinforce(pi, pi_opp, optimizer, train_color, **kwargs):
     winlist = []
     for itr in trange(n_itrs):
         if train_color == "black":
-            games, results = self_play(pi, pi_opp, bs, device = DEV)
+            games, results, fts_list = self_play(pi, pi_opp, bs, get_fts_col = train_color) 
         elif train_color == "white":
-            games, results = self_play(pi_opp, pi, bs, device = DEV)
+            games, results, fts_list = self_play(pi_opp, pi, bs, get_fts_col = train_color)
         else:
             raise ValueError("train_color must be black or white")
 
         wins = 0 
         for i in range(bs):
             loss = 0.0 
-            g = go.Game(moves = games[i])
-            if len(g) < MAX_TURNS - 5:
-                print(len(g))
+            mvs = games[i]
+            if len(mvs) < 50: #learning has gone wrong
+                break
             reward = 1 if (results[i] and train_color == "black")\
                         or (not results[i] and train_color == "white")  else -1
-            #replay the game to calculate the loss
-            if train_color == "white":
-                g.play_move()
-            for j in range(g.turn,len(g),2):
-                dist = policy_dist(pi, g, DEV)
-                mv = torch.tensor(g.moves[j]).to(device)
-                loss += -dist.log_prob(mv)*reward
-                try:
-                    g.play_move()
-                    g.play_move()
-                except go.IllegalMove:
-                    break
+            #calculate the loss
+            inputs = fts_list[i].to(device)
+            dists = SOFTMAX(pi(inputs))
+            pi_mvs = mvs[::2] if train_color == "black" else mvs[1::2]
+            pi_mvs = torch.tensor(pi_mvs).unsqueeze(1).to(device)
+            #sum of negative log probabilities of moves pi played
+            loss += -torch.log(torch.gather(dists, dim=1, index=pi_mvs)).sum()
+            loss *= reward
 
             if train_color == "black":
                 wins += results[i]
@@ -175,7 +221,7 @@ def reinforce(pi, pi_opp, optimizer, train_color, **kwargs):
                 wins += not results[i]
         winlist.append(wins)
 
-        if len(winlist)>0 and len(winlist)%12 == 0:
+        if winlist and len(winlist)%10 == 0:
             avg_win = sum(winlist[-10:])/(bs*10)
             print(f"Winrate ({train_color}): {avg_win:.2f}")
 
@@ -191,18 +237,18 @@ if __name__ == "__main__":
     parser.add_argument("-e", help = "number of epochs", metavar = "E", type = int, dest = 'e', default = 1)
     parser.add_argument("-b", help = "batch size", metavar = "B", type = int, dest = 'b', default = 16)
     parser.add_argument("-n", help = "number of iterations per epoch", metavar = "N", type = int, dest = 'n', default = 64)
-    parser.add_argument("-f", help = "file to write stats to", metavar = "PATH", type = str, dest = 'f', default = "v0.2/RL_stats.txt")
+    parser.add_argument("-f", help = "file to write stats to", metavar = "PATH", type = str, dest = 'f', default = "v0.3/RL_stats.txt")
     args = parser.parse_args()
 
     mp.set_start_method("spawn")
     pi = PolicyNet()
-    optimizer = torch.optim.Adam(pi.parameters())
+    optimizer = torch.optim.AdamW(pi.parameters())
 
-    policy_paths = glob("v0.2/RL_policy_*.pt")
+    policy_paths = glob("v0.3/policy_*.pt")
     n_opps = len(policy_paths) - 1
     print(f"Opponent pool size: {n_opps}")
-    checkpt = torch.load(f"v0.2/RL_policy_{n_opps}.pt",map_location = DEV) 
-    if "optimizer_state_dict" in checkpt:
+    checkpt = torch.load(f"v0.3/policy_{n_opps}.pt",map_location = DEV) 
+    if n_opps != 0 and "optimizer_state_dict" in checkpt:
         optimizer.load_state_dict(checkpt["optimizer_state_dict"])
         #move optimizer states to GPU
         for state in optimizer.state.values():
@@ -219,8 +265,8 @@ if __name__ == "__main__":
         print(f"Epoch: {epoch +1}") 
         pi_opp = PolicyNet()
         #choose a random opponent from the previous policies
-        opp_id = randint(n_opps+1)
-        opp_checkpt = torch.load(f"v0.2/RL_policy_{opp_id}.pt", map_location = DEV)
+        opp_id = randint(0,n_opps+1)
+        opp_checkpt = torch.load(f"v0.3/policy_{opp_id}.pt", map_location = DEV)
         print(f"Playing against Policy {opp_id}")
         pi_opp.load_state_dict(opp_checkpt["model_state_dict"])
         pi_opp.to(DEV)
@@ -248,5 +294,5 @@ if __name__ == "__main__":
             f.write(','.join([str(w) for w in stat_list]) + '\n')
             
         n_opps += 1
-        out_path = os.getcwd() + f"/v0.2/RL_policy_{n_opps}.pt"
+        out_path = os.getcwd() + f"/v0.3/policy_{n_opps}.pt"
         torch.save({"model_state_dict":pi.state_dict(), "optimizer_state_dict":optimizer.state_dict()}, out_path)

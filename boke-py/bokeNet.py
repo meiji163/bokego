@@ -19,21 +19,30 @@ class PolicyNet(nn.Module):
         super(PolicyNet, self).__init__()
         '''27 9x9 input features
         1 5x5 convolution: 9x9 -> 9x9
-        5 3x3 convolution: 9x9 -> 9x9
+        6 3x3 convolution: 9x9 -> 9x9
         1 1x1 convolution with untied bias: 9x9 -> 81
         output distribution over coords 0-81'''
         self.conv = nn.Sequential(
-                nn.Conv2d(27,64,5, padding = 2),
+                nn.Conv2d(27,128,5, padding = 2),
+                nn.BatchNorm2d(128),
                 nn.ReLU(),
-                nn.Conv2d(64,128,3, padding =1),
-                nn.ReLU(),
-                nn.Conv2d(128,128,3, padding = 1),
-                nn.ReLU(),
-                nn.Conv2d(128,128,3, padding = 1),
+                nn.Conv2d(128,128,3, padding =1),
+                nn.BatchNorm2d(128),
                 nn.ReLU(),
                 nn.Conv2d(128,128,3, padding = 1),
+                nn.BatchNorm2d(128),
                 nn.ReLU(),
                 nn.Conv2d(128,128,3, padding = 1),
+                nn.BatchNorm2d(128),
+                nn.ReLU(),
+                nn.Conv2d(128,128,3, padding = 1),
+                nn.BatchNorm2d(128),
+                nn.ReLU(),
+                nn.Conv2d(128,128,3, padding = 1),
+                nn.BatchNorm2d(128),
+                nn.ReLU(),
+                nn.Conv2d(128,128,3, padding = 1),
+                nn.BatchNorm2d(128),
                 nn.ReLU(),
                 Conv2dUntiedBias(9,9,128,1,1))
     def forward(self, x):
@@ -44,7 +53,7 @@ class PolicyNet(nn.Module):
 class ValueNet(nn.Module):
     '''27 9x9 input features
     1 5x5 convolution: 9x9 -> 9x9
-    4 3x3 convolutions: 9x9 -> 9x9
+    6 3x3 convolutions: 9x9 -> 9x9
     1 1x1 convolution: 9x9 -> 9x9
     2 fully connected layers
     output value (between -1 and 1)
@@ -144,12 +153,17 @@ class NinebyNineGames(Dataset):
         return len(self.boards)
 
     def __getitem__(self, idx):
-        board, ko, last, val = self.boards.iloc[idx]
-        g = go.Game(board = board, ko = ko, last_move = last)
-        turn = 1 if g.board[last] == go.BLACK else 0
-        g.turn = turn
-        res = -1.0 if val else 1.0
-        return features(g), torch.Tensor([res]) 
+        board, ko, turn, last, move = self.boards.iloc[idx]
+        g = go.Game(board = board, ko = ko, last_move = last, turn = turn)
+        
+        #For value data
+    
+        #board, ko, last, val = self.boards.iloc[idx]
+        #g = go.Game(board = board, ko = ko, last_move = last)
+        #turn = 1 if g.board[last] == go.BLACK else 0
+        #g.turn = turn
+        #res = -1.0 if val else 1.0
+        return features(g), move 
 
     @staticmethod
     def convert_type(x):

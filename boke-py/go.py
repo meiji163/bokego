@@ -131,11 +131,11 @@ class Game():
     @staticmethod
     def get_moves(sgf):
         with open(sgf, 'r') as f:
-            match = re.findall(r"[BW]\[(\w*)\]", f.read())
+            match = re.findall(r";[BW]\[(\w\w)\]", f.read())
         mvs = []
         for mv in match:
-            if len(mv)!= 2:
-                break
+            if mv == '': 
+                mvs.append(-1)
             else: 
                 mvs.append(9*(ord(mv[0])-97) + ord(mv[1])-97 )
         return mvs
