@@ -4,7 +4,7 @@ import sys
 import os
 from itertools import cycle
 from bokeNet import PolicyNet, ValueNet, policy_dist
-from mcts import MCTS, Go_MCTS
+from mcts import MCTS, Go_MCTS, do_rollout
 from threading import Thread
 import torch
 from torch import load, device, set_grad_enabled 
@@ -12,8 +12,8 @@ import argparse
 from time import sleep
 
 parser = argparse.ArgumentParser(description = "Play against Boke")
-parser.add_argument("-p", metavar="PATH", type = str, dest = 'p', help = "path to policy", default = "v0.2/RL_policy_29.pt")
-parser.add_argument("-v", metavar="PATH", type = str, dest = 'v', help = "path to value net", default = "v0.2/value_2020-11-13_6.pt")
+parser.add_argument("-p", metavar="PATH", type = str, dest = 'p', help = "path to policy", default = os.path.join(os.getcwd(), "v0.2\\RL_policy_29.pt"))
+parser.add_argument("-v", metavar="PATH", type = str, dest = 'v', help = "path to value net", default = os.path.join(os.getcwd(), "v0.2\\value2020-11-28_3.pt"))
 parser.add_argument("-c", type = str, action = 'store', choices = ['W','B'], dest = 'c', help = "Boke's color", default = ['W'])
 parser.add_argument("-r", nargs = 1, metavar="ROLLOUTS", action = 'store', type = int, default = [100], dest = 'r', help = "number of rollouts per move")
 parser.add_argument("--mode", type = str, choices = ["gui","gtp"], default = "gui", help = "Graphical or GTP mode") 
@@ -133,18 +133,19 @@ def gtp(tree, device):
     
 if  __name__ == "__main__":
     device = device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = "cpu"
     pi = PolicyNet()
     checkpt = load(args.p, map_location = device)
     pi.load_state_dict(checkpt["model_state_dict"])
     pi.to(device)
     pi.eval()
-    #val = ValueNet()
-    #checkpt = load(args.v, map_location = device)
-    #val.load_state_dict(checkpt["model_state_dict"])
-    #val.to(device)
-    #val.eval()
+    val = ValueNet()
+    checkpt = load(args.v, map_location = device)
+    val.load_state_dict(checkpt["model_state_dict"])
+    val.to(device)
+    val.eval()
     board = Go_MCTS(device = device)
-    tree = MCTS(policy_net=pi, exploration_weight = 0.5)
+    tree = MCTS(policy_net=pi, value_net=val, exploration_weight = 0.5)
     set_grad_enabled(False)
 
     if args.mode == 'gtp':
@@ -167,8 +168,9 @@ if  __name__ == "__main__":
 
         #rollouts while waiting
         while in_ref[0] == None:
-            tree.do_rollout(board)
-        
+            # tree.do_rollout(board)
+            tree.root_parallel_rollouts(root_node=board, n_workers=8, n_per=20)
+
         uin = in_ref[0]
         if uin == 'h':
             move = torch.argmax(policy_dist(pi, board, device = device).probs).item()
@@ -190,7 +192,8 @@ if  __name__ == "__main__":
                 t.start() 
                 
                 rolls = 13 if board.turn < 13 else NUM_ROLLOUTS
-                tree.do_rollout(board,rolls)
+                tree.root_parallel_rollouts(board, n_workers=8, n_per=20)
+                # tree.do_rollout(board,rolls)
                 done = True
                 board = tree.choose(board)
             except go.IllegalMove:

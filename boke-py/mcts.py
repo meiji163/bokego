@@ -1,5 +1,6 @@
 from collections import defaultdict
 import math
+import torch.multiprocessing as mp
 import copy
 from random import choice, randrange
 from selfplay import gnu_score
@@ -31,6 +32,16 @@ class MCTS:
         self.value_net_weight = value_net_weight
         self.winrate = None 
 
+    # def __copy__(self):
+    #     new_MCTS = MCTS(value_net=self.value_net, policy_net=self.policy_net,
+    #                     exploration_weight=self.exploration_weight,
+    #                     value_net_weight=self.value_net_weight)
+    #     new_MCTS.Q = self.Q.copy()
+    #     new_MCTS.N = self.N.copy()
+    #     new_MCTS.V = self.V.copy()
+    #     new_MCTS.children = self.children.copy()
+    #     return new_MCTS
+
     def choose(self, node):
         "Choose the best successor of node. (Choose a move in the game)"
         if node.terminal:
@@ -50,19 +61,35 @@ class MCTS:
         print( self.Q[best] , self.Q[best])
         return best
 
-    def do_rollout(self, node, n = 1):
-        "Train for n iterations"
-        for _ in range(n):
-            # Get path to leaf of current search tree
-            path = self._descend(node)
-            leaf = path[-1]
-            if leaf.features is None:
-                leaf.set_features()
-            if self.value_net and not leaf.value:
-                leaf.set_value(self.value_net)
-            # Get result of rollout starting from leaf
-            score = self._simulate(leaf, gnu = True)
-            self._backpropagate(path, score, leaf.value)
+    ''' Original single-threaded rollout method'''
+    # def do_rollout(self, node, n = 1):
+    #     "Train for n iterations"
+    #     for _ in range(n):
+    #         # Get path to leaf of current search tree
+    #         path = self._descend(node)
+    #         leaf = path[-1]
+    #         if leaf.features is None:
+    #             leaf.set_features()
+    #         if self.value_net and not leaf.value:
+    #             leaf.set_value(self.value_net)
+    #         # Get result of rollout starting from leaf
+    #         score = self._simulate(leaf, gnu = True)
+    #         self._backpropagate(path, score, leaf.value)
+
+    ''' New multi-threaded rollout method'''
+    def root_parallel_rollouts(self, root_node, n_workers, n_per):
+        torch.set_grad_enabled(False)
+        with mp.Manager() as manager:
+            # mp.set_start_method('spawn')
+            q = manager.Queue()
+            mp.spawn(do_rollout, (copy.deepcopy(self), copy.deepcopy(root_node), n_per, q), n_workers)
+            while not q.empty():
+                tree = q.get()
+                for node in tree.V:
+                    self.Q[node] += tree.Q[node]
+                    self.N[node] += tree.N[node]
+                    self.V[node] += tree.V[node]
+            q.close()
 
     def _descend(self, node):
         "Return a path from root down to leaf via PUCT selection"
@@ -120,7 +147,7 @@ class MCTS:
             node.set_dist(self.policy_net)
         def puct(n):
             last_move_prob = node.dist.probs[n.last_move].item()
-            if not self.value_net is None:
+            if self.value_net is not None:
                 avg_reward = 0 if self.N[n] == 0 else ((1 - self.value_net_weight) * self.Q[n]
                                                         + self.value_net_weight * self.V[n]) / self.N[n]
             else:
@@ -130,6 +157,22 @@ class MCTS:
                     * math.sqrt(total_visits) / (1 + self.N[n]))
 
         return max(self.children[node], key=puct)
+
+# Now a helper function for multi-threaded rollouts
+def do_rollout(i, tree, node, n, queue):
+    "Train for n iterations"
+    for _ in range(n):
+        # Get path to leaf of current search tree
+        path = tree._descend(node)
+        leaf = path[-1]
+        if leaf.features is None:
+            leaf.set_features()
+        if tree.value_net and not leaf.value:
+            leaf.set_value(tree.value_net)
+        # Get result of rollout starting from leaf
+        score = tree._simulate(leaf, gnu = False)
+        tree._backpropagate(path, score, leaf.value)
+    queue.put(tree)
 
 
 class Go_MCTS(go.Game):
