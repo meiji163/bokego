@@ -1,3 +1,5 @@
+# Version 0.3 PolicyNet and Neural Net
+
 import go
 import os
 from math import sqrt
@@ -11,6 +13,7 @@ from torch.nn.parameter import Parameter
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+
 
 SOFT = nn.Softmax(dim = 1)
 
