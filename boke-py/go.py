@@ -1,10 +1,15 @@
 import re
+import random
 import itertools
 from textwrap import wrap
 N = 9 
 WHITE, BLACK, EMPTY = 'O', 'X', '.'
 EMPTY_BOARD = EMPTY*(N**2) 
 PASS = -1
+
+HASH_TABLE = [[ random.getrandbits(64) for _ in range(N*N)] for _ in range(3)]
+TURN_HASH = random.getrandbits(64)
+
 class Game():
     '''go.Game: a class to represent a go game. The board is represented as a length N^2 string
     using "squashed coordinates" 0,1,...,N^2-1. PASS is -1
@@ -15,18 +20,21 @@ class Game():
         moves: list -- the list of moves played
         sgf: str -- path to an sgf to initialize from
         '''
-    def __init__(self, board = EMPTY_BOARD, ko = None, last_move = None, turn = 0, moves = None, komi = 5.5, sgf = None):
+    def __init__(self, board = EMPTY_BOARD, 
+                ko = None, last_move = None, 
+                turn = 0, moves = None, 
+                komi = 5.5, sgf = None):
         self.turn = turn
         self.ko = ko
         self.board= board
         self.komi = komi
         self.last_move = last_move
+        self.hash = None
         if sgf:
-            self.moves = self.get_moves(sgf)
+            self.moves = get_moves(sgf)
         else:
             self.moves = moves
         self.enc = {BLACK: 1, WHITE: -1, EMPTY: 0}
-
 
     def __str__(self):
         out = self.board
@@ -41,7 +49,12 @@ class Game():
         if self.moves:
             return len(self.moves)
         return 0
-
+    
+    def __hash__(self):
+        if self.hash is None:
+            self.hash = self.zobrist_hash()
+        return self.hash
+        
     def get_board(self):
         return [self.enc[s] for s in self.board]
 
@@ -49,12 +62,17 @@ class Game():
         if not self.moves:
             self.moves = [PASS]
         self.last_move = PASS 
+        if self.hash:
+            if self.ko != None:
+                self.hash ^= HASH_TABLE[turn%2][self.ko]
+            self.hash ^= TURN_HASH    
         self.turn += 1
         self.ko = None
 
     def play_move(self, sq_c = None, testing = False):
         '''play move from self.moves. If a coordinate is given that is played instead.
-        optional: testing = True stops board from being modified''' 
+        optional: 
+            testing = True stops board from being modified''' 
         if sq_c == None:
             if self.turn >= len(self):
                 print("No moves to play.")
@@ -85,6 +103,18 @@ class Game():
             self.moves = [sq_c]
         else:
             self.moves.append(sq_c)
+
+        if self.hash:
+            #update the Zobrist hash
+            self.hash ^= HASH_TABLE[self.turn%2][sq_c]
+            if self.ko != None:
+                self.hash ^= HASH_TABLE[2][self.ko]
+            if new_ko != None:
+                self.hash ^= HASH_TABLE[2][new_ko]
+            if opp_captured:
+                for sq_b in opp_captured:
+                    self.hash ^= HASH_TABLE[(self.turn + 1)%2][sq_b]
+            self.hash ^= TURN_HASH
         self.board = new_board
         self.last_move = sq_c
         self.ko = new_ko
@@ -98,8 +128,8 @@ class Game():
             return False
 
     def score(self):
-        '''Calculated using Chinese rules, assuming dead groups are captured
-        and no sekis'''
+        '''Calculated using Tromp-Taylor rules 
+        (only accurate assuming dead groups are captured)'''
         board = self.board
         while EMPTY in board:
             empty = board.index(EMPTY)
@@ -128,21 +158,43 @@ class Game():
                 board = bulk_place_stones('?', board, stones)
         return list(liberties)
 
-    @staticmethod
-    def get_moves(sgf):
-        with open(sgf, 'r') as f:
-            match = re.findall(r"[BW]\[(\w*)\]", f.read())
-        mvs = []
-        for mv in match:
-            if len(mv)!= 2:
-                break
-            else: 
-                mvs.append(9*(ord(mv[0])-97) + ord(mv[1])-97 )
-        return mvs
+    def zobrist_hash(self): 
+        ''' Compute the Zobrist hash of the current game state using the hash table.
+        args:
+            hash_table: a 3xN^2 array populated with random integers
+        optional:
+            turn_hash: a random integer to XOR with if it is black's turn
+        '''
+        out = 0 
+        for sq_c in range(N*N):
+            if self.board[sq_c] == BLACK:
+                out ^= HASH_TABLE[0][sq_c]
+            elif self.board[sq_c] == WHITE:
+                out ^= HASH_TABLE[1][sq_c]
+        if self.ko:
+            out ^= HASH_TABLE[2][sq_c]
+        if TURN_HASH and self.turn%2 == 0:
+            out ^= TURN_HASH 
+        return out 
+
+#Helper functions
+
+def get_moves(sgf):
+    with open(sgf, 'r') as f:
+        match = re.findall(r";[BW]\[(\w*)\]", f.read())
+    mvs = []
+    for mv in match:
+        if len(mv)!= 2:
+            break
+        else: 
+            mvs.append(9*(ord(mv[0])-97) + ord(mv[1])-97 )
+    return mvs
 
 def squash(c, alph = False):
-    '''squash converts coordinate pair to single integer 0 <= n < N^2.
-    alph = True squashes a letter-number coordinate string '''
+    '''Converts coordinate pair to single integer 0 <= n < N^2.
+    If a list of coordinates are passed, convert each element.
+    optional:
+        alph = True squashes a letter-number coordinate string '''
     if isinstance(c, list):
         return [squash(b) for b in c]
     if alph:
@@ -208,7 +260,7 @@ NEIGHBORS = [squash( list( filter(is_on_board, [(x+1, y), (x-1, y), (x, y+1), (x
                 for x in range(N) for y in range(N)] 
 DIAGONALS = [squash( list( filter(is_on_board, [(x+1,y+1), (x+1, y-1), (x-1, y-1), (x-1, y-1)]))) \
                 for x in range(N) for y in range(N)] 
-#Helper functions
+
 def place_stone(color, board, sq_c):
     return board[:sq_c] + color + board[sq_c+1:]
 
@@ -259,6 +311,7 @@ def possible_ko(board, sq_c):
         return None
 
 def possible_eye(board, sq_c):
+    '''Check if sq_c is (one point) eye and return the color of the eye'''
     color = possible_ko(board, sq_c)
     if color is None:
         return None
