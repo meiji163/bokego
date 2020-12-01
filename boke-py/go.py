@@ -1,26 +1,56 @@
 import re
+import os
 import random
 import itertools
-from textwrap import wrap
-N = 9 
+
+N = 9 #board size
 WHITE, BLACK, EMPTY = 'O', 'X', '.'
 EMPTY_BOARD = EMPTY*(N**2) 
+ENC = {BLACK: 1, WHITE: -1, EMPTY: 0}
 PASS = -1
 
-HASH_TABLE = [[ random.getrandbits(64) for _ in range(N*N)] for _ in range(3)]
-TURN_HASH = random.getrandbits(64)
+class IllegalMove(Exception):
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.game = kwargs.get('game')
+        self.rule_type = kwargs.get('rule_type')
+        self.move = None
+        if 'sq_c' in kwargs:
+            self.move = unsquash(kwargs['sq_c'], alph = True)
+        elif 'alph_c' in kwargs:
+            self.move = kwargs['alph_c'] 
+        elif 'c' in kwargs:
+            c = kwargs['c']
+            self.move = unsquash(9*c[0]+c[1], alph = True)
+
+    def __str__(self):
+        if rule_type == "ko":
+            msg = f"\n{game}\n Move at {self.move} illegally retakes ko."
+        elif rule_type == "suicide":
+            msg = f"\n{game}\n Move at {self.move} is suicide."
+        elif rule_type == "off_board":
+            msg = f"Move is not on board"
+        elif rule_type == "not_empty":
+            msg = f"\n{game}\n There is already a stone at {self.move}"
+        else:
+            msg = ''
+        return msg
 
 class Game():
-    '''go.Game: a class to represent a go game. The board is represented as a length N^2 string
-    using "squashed coordinates" 0,1,...,N^2-1. PASS is -1
-    optional parameters: 
-        board: str -- initialize a board position
-        ko: int -- the position of the current ko
-        turn: int -- the current turn number
-        moves: list -- the list of moves played
-        sgf: str -- path to an sgf to initialize from
+    '''go.Game: a class to represent a go game.
+    Board coordinates are `squashed` (0 -- N**2).
+    
+    attributes:
+        board: length N**2 string of WHITE, BLACK, and EMPTY representing board
+        ko: the coordinate of the current ko, None if no ko
+        turn: turn number (starting from 0) 
+        moves: list of moves played 
+        sgf: path to an sgf file to initialize moves from
+        hash: stored 64 bit Zobrist hash of game state
         '''
-    def __init__(self, board = EMPTY_BOARD, 
+    hash_table = [[ random.getrandbits(64) for _ in range(N*N)] for _ in range(4)]
+
+    def __init__(self, board = EMPTY_BOARD,
                 ko = None, last_move = None, 
                 turn = 0, moves = None, 
                 komi = 5.5, sgf = None):
@@ -34,57 +64,70 @@ class Game():
             self.moves = get_moves(sgf)
         else:
             self.moves = moves
-        self.enc = {BLACK: 1, WHITE: -1, EMPTY: 0}
+        self._libs = None
 
     def __str__(self):
         out = self.board
-        if N == 9:
-        #mark flower points
+        if N == 9: #mark flower points
             for i in [20,24,40,56,60]:
                 if out[i] == EMPTY:
                     out = place_stone('+', out, i)
         return "\t  " +' '.join(["ABCDEFGHJKLMNOPQRST"[i] for i in range(N)]) +"\n" \
-            + '\n'.join(['\t'+str(i + 1)+' '+ ' '.join( out[N*i:N*(i+1)]) for i in range(N)])
+                + '\n'.join(['\t'+str(i + 1)+' '
+                + ' '.join( out[N*i:N*(i+1)]) for i in range(N)])
+    
+    def __hash__(self):
+        if self.hash == None:
+            self.hash = zobrist_hash(self.board, self.ko, self.last_move, Game.hash_table)
+        return self.hash
+
     def __len__(self):
         if self.moves:
             return len(self.moves)
         return 0
-    
-    def __hash__(self):
-        if self.hash is None:
-            self.hash = self.zobrist_hash()
-        return self.hash
+
+    def __repr__(self):
+        return repr( (self.board, self.ko, self.last_move, self.turn) )
         
-    def get_board(self):
-        return [self.enc[s] for s in self.board]
+    def to_numpy(self):
+        '''Convert board to (N,N) numpy array'''
+        try:
+            import numpy as np
+        except ImportError:
+            print("Numpy not found")
+            return
+        return np.array([ENC[sq_c] for sq_c in self.board]).reshape(N,N)
 
     def play_pass(self):
+        if self.hash != None:
+            if self.ko != None:
+                self.hash ^= Game.hash_table[turn%2][self.ko]
+            if self.last_move != PASS and self.last_move != None:
+                self.hash ^= Game.hash_table[turn%2][self.last_move]
         if not self.moves:
             self.moves = [PASS]
-        self.last_move = PASS 
-        if self.hash:
-            if self.ko != None:
-                self.hash ^= HASH_TABLE[turn%2][self.ko]
-            self.hash ^= TURN_HASH    
+        else:
+            self.moves.append(PASS)
         self.turn += 1
         self.ko = None
+        self.last_move = PASS 
 
     def play_move(self, sq_c = None, testing = False):
-        '''play move from self.moves. If a coordinate is given that is played instead.
+        '''Play move at sq_c. If no coordinate is given a move is played from self.moves.
         optional: 
-            testing = True stops board from being modified''' 
-        if sq_c == None:
+            testing: stop game state from being modified (default False)''' 
+        if sq_c is None:
             if self.turn >= len(self):
                 print("No moves to play.")
                 return
             sq_c = self.moves[self.turn]
-        if sq_c == PASS:
+        elif sq_c == PASS:
             self.play_pass()
             return
-        if sq_c == self.ko:
-            raise IllegalMove(f"\n{self}\n Move at {sq_c} illegally retakes ko.")
-        if self.board[sq_c] != EMPTY:
-            raise IllegalMove(f"\n{self}\n There is already a stone at {sq_c}")
+        elif sq_c == self.ko:
+            raise IllegalMove(game = self, rule_type = "ko", sq_c = sq_c)
+        elif self.board[sq_c] != EMPTY:
+            raise IllegalMove(game = self, rule_type = "not_empty", sq_c = sq_c)
         color = (WHITE if self.turn%2 ==1 else BLACK) 
         opp_color = (BLACK if color == WHITE else WHITE) 
         possible_ko_color = possible_ko(self.board, sq_c)
@@ -97,8 +140,9 @@ class Game():
         # Check for suicide
         new_board, captured = maybe_capture_stones(new_board, sq_c)
         if captured:
-            raise IllegalMove(f"\n{self}\n Move at {sq_c} is suicide.")
+            raise IllegalMove(game = self, rule_type = "suicide", sq_c = sq_c)
         if testing: return
+
         if not self.moves:
             self.moves = [sq_c]
         else:
@@ -106,15 +150,18 @@ class Game():
 
         if self.hash:
             #update the Zobrist hash
-            self.hash ^= HASH_TABLE[self.turn%2][sq_c]
+            self.hash ^= Game.hash_table[self.turn%2][sq_c]
             if self.ko != None:
-                self.hash ^= HASH_TABLE[2][self.ko]
+                self.hash ^= Game.hash_table[2][self.ko]
             if new_ko != None:
-                self.hash ^= HASH_TABLE[2][new_ko]
+                self.hash ^= Game.hash_table[2][new_ko]
             if opp_captured:
                 for sq_b in opp_captured:
-                    self.hash ^= HASH_TABLE[(self.turn + 1)%2][sq_b]
-            self.hash ^= TURN_HASH
+                    self.hash ^= Game.hash_table[(self.turn + 1)%2][sq_b]
+            if self.last_move != PASS and self.last_move != None:
+                self.hash ^= Game.hash_table[(self.turn + 1)%2][self.last_move]
+            self.hash ^= Game.hash_table[3][sq_c]
+
         self.board = new_board
         self.last_move = sq_c
         self.ko = new_ko
@@ -147,67 +194,48 @@ class Game():
 
     def get_liberties(self):
         board = self.board
-        liberties = bytearray(N*N)
-        for color in (WHITE, BLACK):
-            while color in board:
-                sq_c = board.index(color)
-                stones, borders = flood_fill(board, sq_c)
-                num_libs = len([sq_b for sq_b in borders if board[sq_b] == EMPTY])
-                for sq_s in stones:
-                    liberties[sq_s] = num_libs
-                board = bulk_place_stones('?', board, stones)
-        return list(liberties)
+        if self._libs is None:
+            self._libs = bytearray(N*N)
+            for color in (WHITE, BLACK):
+                while color in board:
+                    sq_c = board.index(color)
+                    num_libs, stones = get_stone_lib(board, sq_c, return_grp = True)
+                    for sq_s in stones:
+                        self._libs[sq_s] = num_libs
+                    board = bulk_place_stones('?', board, stones)
 
-    def zobrist_hash(self): 
-        ''' Compute the Zobrist hash of the current game state using the hash table.
-        args:
-            hash_table: a 3xN^2 array populated with random integers
-        optional:
-            turn_hash: a random integer to XOR with if it is black's turn
-        '''
-        out = 0 
-        for sq_c in range(N*N):
-            if self.board[sq_c] == BLACK:
-                out ^= HASH_TABLE[0][sq_c]
-            elif self.board[sq_c] == WHITE:
-                out ^= HASH_TABLE[1][sq_c]
-        if self.ko:
-            out ^= HASH_TABLE[2][sq_c]
-        if TURN_HASH and self.turn%2 == 0:
-            out ^= TURN_HASH 
-        return out 
+        elif self.last_move != PASS and self._libs[self.last_move] == 0: 
+        #liberties from previous state exist and not yet updated
+            seen = set()
+            color = board[self.last_move]
+            for sq_b in NEIGHBORS[self.last_move]:
+                if not board[sq_b] == EMPTY and sq_b not in seen: 
+                    num_libs, stones = get_stone_lib(board, sq_b, return_grp = True)
+                    for sq_s in stones:
+                        self._libs[sq_s] = num_libs
+                    seen |= stones 
+            if len(seen) == 0:
+                self._libs[sq_s] = 1    
+        return list(self._libs)
 
-#Helper functions
-
-def get_moves(sgf):
-    with open(sgf, 'r') as f:
-        match = re.findall(r";[BW]\[(\w*)\]", f.read())
-    mvs = []
-    for mv in match:
-        if len(mv)!= 2:
-            break
-        else: 
-            mvs.append(9*(ord(mv[0])-97) + ord(mv[1])-97 )
-    return mvs
+#Helper functions 
 
 def squash(c, alph = False):
-    '''Converts coordinate pair to single integer 0 <= n < N^2.
+    '''Converts coordinate pair to single integer 0 -- N^2.
     If a list of coordinates are passed, convert each element.
     optional:
-        alph = True squashes a letter-number coordinate string '''
+        alph: squashes a letter-number coordinate '''
     if isinstance(c, list):
-        return [squash(b) for b in c]
+        return list(map(squash, c))
     if alph:
         #Letters skip I
         y = 8 if c[0] == 'J' else ord(c[0]) - 65 
         c = ( int(c[1]) - 1,  y)
-        if not is_on_board(c): 
-            raise IllegalMove("{} is not on the board".format(c))
     return N * c[0] + c[1]
 
 def unsquash(sq_c, alph = False):
     if isinstance(sq_c, list): 
-        return [unsquash(sq_b) for sq_b in sq_c]
+        return list(map(unsquash), sq_c) 
     else:
         c = divmod(sq_c, N)
         if alph:
@@ -217,6 +245,11 @@ def unsquash(sq_c, alph = False):
 
 def is_on_board(c):
     return c[0] % N == c[0] and c[1] % N == c[1]
+
+NEIGHBORS = [squash(list( filter(is_on_board, [(x+1, y), (x-1, y), (x, y+1), (x, y-1)]))) \
+                for x in range(N) for y in range(N)] 
+DIAGONALS = [squash(list( filter(is_on_board, [(x+1,y+1), (x+1, y-1), (x-1, y-1), (x-1, y-1)]))) \
+                for x in range(N) for y in range(N)] 
 
 def flood_fill(board, sq_c):
     '''Flood fill to find the connected component containing sq_c and its boundary'''
@@ -234,9 +267,17 @@ def flood_fill(board, sq_c):
                 reached.add(sq_n)
     return chain, reached
 
-def get_stone_lib(board, sq_c):
+def get_stone_lib(board, sq_c, return_grp = False):
+    '''get liberties of stone at coordinate sq_c 
+    optional:
+        return_grp: return the coordinates of stones in the group containing sq_c'''
+    if board[sq_c] not in (WHITE, BLACK):
+        return 0
     stones, borders = flood_fill(board, sq_c)
-    return len([sq_b for sq_b in borders if board[sq_b] == EMPTY])
+    num_libs = len([sq_b for sq_b in borders if board[sq_b] == EMPTY])
+    if return_grp:
+        return num_libs, stones
+    return num_libs
 
 def get_caps(board, sq_c, color):
         opp_color = BLACK if color == WHITE else WHITE
@@ -254,13 +295,6 @@ def get_caps(board, sq_c, color):
         new_board = bulk_place_stones(EMPTY, board, opp_captured)
         return new_board, opp_captured
 
-class IllegalMove(Exception): pass
-
-NEIGHBORS = [squash( list( filter(is_on_board, [(x+1, y), (x-1, y), (x, y+1), (x, y-1)]))) \
-                for x in range(N) for y in range(N)] 
-DIAGONALS = [squash( list( filter(is_on_board, [(x+1,y+1), (x+1, y-1), (x-1, y-1), (x-1, y-1)]))) \
-                for x in range(N) for y in range(N)] 
-
 def place_stone(color, board, sq_c):
     return board[:sq_c] + color + board[sq_c+1:]
 
@@ -272,7 +306,8 @@ def bulk_place_stones(color, board, stones):
     return byteboard.decode('ascii') 
 
 def maybe_capture_stones(board, sq_c):
-    '''see if group at sq_c is captured'''
+    '''Check if group at sq_c is captured.
+    Return board with stones captured, and list of captured coordinates.'''
     chain, reached = flood_fill(board, sq_c)
     if not any(board[sq_r] == EMPTY for sq_r in reached):
         board = bulk_place_stones(EMPTY, board, chain)
@@ -281,8 +316,10 @@ def maybe_capture_stones(board, sq_c):
         return board, []
 
 def play_move_incomplete(board, sq_c, color):
+    '''Place `color` stone at sq_c on board and capture stones.
+    Doesn't check for ko or suicide.'''
     if board[sq_c] != EMPTY:
-        raise IllegalMove
+        raise IllegalMove(game = self, rule_type = "not_empty", sq_c = sq_c)
     board = place_stone(color, board, sq_c)
 
     opp_color = WHITE if color == BLACK else WHITE
@@ -326,3 +363,33 @@ def possible_eye(board, sq_c):
         return None
     else:
         return color
+
+def zobrist_hash(board, ko, last_move, hash_table): 
+    ''' Compute the Zobrist hash of the current game state defined by
+    board, ko, and last_move using hash_table
+    args:
+        hash_table: a 4xN**2 array populated with random ints''' 
+    out = 0 
+    for sq_c in range(N*N):
+        if board[sq_c] == BLACK:
+            out ^= hash_table[0][sq_c]
+        elif board[sq_c] == WHITE:
+            out ^= hash_table[1][sq_c]
+    if ko != None:
+        out ^= hash_table[2][ko]
+    if last_move != None and last_move != -1:
+        out ^= hash_table[3][last_move]
+    return out 
+
+def get_moves(sgf):
+    if not os.path.exists(sgf):
+        raise IOError(f"Can't open sgf '{sgf}'")
+    with open(sgf, 'r') as f:
+        match = re.findall(r";[BW]\[(\w*)\]", f.read())
+    mvs = []
+    for mv in match:
+        if len(mv) == 0:
+            mvs.append(PASS)
+        else: 
+            mvs.append(9*(ord(mv[0])-97) + ord(mv[1])-97 )
+    return mvs

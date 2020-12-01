@@ -44,7 +44,7 @@ class PolicyNet(nn.Module):
 class ValueNet(nn.Module):
     '''27 9x9 input features
     1 5x5 convolution: 9x9 -> 9x9
-    4 3x3 convolutions: 9x9 -> 9x9
+    7 3x3 convolutions: 9x9 -> 9x9
     1 1x1 convolution: 9x9 -> 9x9
     2 fully connected layers
     output value (between -1 and 1)
@@ -165,36 +165,36 @@ class NinebyNineGames(Dataset):
 
 def features(game: go.Game):
     ''' go.Game --> (27,9,9) torch.Tensor
-        Compute the input features from the board state
+        Compute the input features from the game state
         
         9x9 layer index: feature
         ------------------------
         0: player stones        
-            1 if coord has player's stones, else 0
+            1 if coord has player's stones, else 0.
         1: opponent stones      
-            1 if coord has opponent's stone, else 0
+            1 if coord has opponent's stone, else 0.
         2: empty                
-            1 if coord is empty, else 0
+            1 if coord is empty, else 0.
         3: turn                 
-            all 1's if it is B's turn, all 0's if it is W's turn
+            all 1's if it is B's turn, all 0's if it is W's turn.
         4: last move
-            1 if coord was last move, else 0
+            1 if coord was last move, else 0.
         5: legal                
-            1 if coord is legal move for player, else 0
+            1 if coord is legal move for player, else 0.
         6-12: liberties         
-            n if stone at coord has n liberties, else 0
+            n if stone at coord has n liberties, else 0.
             layer 5 has coords with 1 liberty
             layer 6 has coords with 2 liberties
             ...
             layer 11 has coords with >6 liberties
         13-19: liberties after playing
-            n if coord is a legal move and player's stone has n liberties after playing, else 0
+            n if coord is a legal move and player's stone has n liberties after playing, else 0.
             liberties are separated the same way as 5-11
         20-26: number of captures
-            n if playing at coord would capture n opponent stones, else 0
+            n if playing at coord would capture n opponent stones, else 0.
             number of captures are separated the same way as 5-11
         '''
-    plyr = np.array(game.get_board()).reshape(1,9,9)
+    plyr = np.expand_dims(game.to_numpy(), 0)
     oppt = np.copy(plyr) 
     turn_num = (1 if game.turn%2 == 0 else -1)
     color = (go.BLACK if turn_num == 1 else go.WHITE)
@@ -203,6 +203,7 @@ def features(game: go.Game):
     plyr *= turn_num 
     oppt *= -turn_num
     empty = np.invert((plyr + oppt).astype(bool)).astype(float)
+
     if color == go.BLACK:
         turn = np.ones((1,9,9), dtype = float)
     else:
@@ -241,7 +242,6 @@ def features(game: go.Game):
             separate(libs) , separate(libs_after) , separate(caps)])
     return torch.from_numpy(fts).float()
 
-
 def policy_dist(policy: PolicyNet,
                 game: go.Game,
                 device = torch.device("cpu"),
@@ -275,5 +275,4 @@ def policy_sample(policy: PolicyNet,
     probs = SOFT(policy(fts)).squeeze(0)
     m = Categorical(probs)
     return m.sample()
-
 

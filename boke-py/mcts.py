@@ -3,11 +3,9 @@ import math
 import torch.multiprocessing as mp
 import os
 import copy
-from random import choice, randrange
 from selfplay import gnu_score
 import time
 import torch
-import random
 from bokeNet import ValueNet, value, PolicyNet, policy_dist, features
 import go
 
@@ -73,26 +71,32 @@ class MCTS:
     #         score = self._simulate(leaf, gnu = True)
     #         self._backpropagate(path, score, leaf.value)
 
-    def root_parallel_rollouts(self, root_node, n_workers, n_per):
-        with mp.Manager() as manager:
-            #using three dicts bc lists have weird behavior
-            N = manager.dict({repr(node): visits for node, visits in self.N.items()})
-            Q = manager.dict({repr(node): rewards for node, rewards in self.Q.items()})
-            V = manager.dict({repr(node): vals for node, vals in self.Q.items()})
+    def root_parallel_rollouts(self, root_node, n_workers, n_per, manager):
+        '''Spawn processes to do rollouts from the root on separated trees,
+        and combine the trees and stats at the end.
+        args:
+            manager: multiprocessing.Manager (should be created in main)
+        '''
+        s_N = manager.dict(self.N)
+        s_Q = manager.dict(self.Q)
+        s_V = manager.dict(self.V)
+        s_children = manager.dict(self.children)
 
-            processes = []
-            for _ in range(n_workers):
-                p = mp.Process(target = do_rollout, 
-                                args = (copy.deepcopy(self), copy.deepcopy(root_node), n_per),
-                                kwargs = {'V': V, 'N': N, 'Q': Q})
-                p.start()
-                processes.append(p)
-            for p in processes:
-                p.join()
-            #TODO
-            #build combined tree
-            #cache policy distributions from different processes
-            
+        #WARNING: 
+        #disable torch autograd globally before spawning
+        mp.spawn(do_rollout, 
+            args = (copy.deepcopy(self), copy.deepcopy(root_node), n_per, s_N, s_Q, s_V, s_children),
+            nprocs = n_workers)
+        
+        self.N.update(s_N)
+        self.Q.update(s_Q)
+        self.V.update(s_V)
+        self.children.update(s_children)
+        print(self.children)
+        #TODO:
+        #cache policy distributions from different processes
+         
+        
     def _descend(self, node):
         "Return a path from root down to leaf via PUCT selection"
         # Start at root (current position)
@@ -115,6 +119,7 @@ class MCTS:
     # Need to make this faster (ideally at least 10x)
     def _simulate(self, node, gnu = False):
         '''Returns the reward for a random simulation (to completion) of node
+
         optional: 
             gnu: score with gnugo (default False)''' 
         invert_reward = not node.color
@@ -125,36 +130,27 @@ class MCTS:
                 return reward
             node = node.find_random_child(self.policy_net)
 
-    def _backpropagate(self, path, reward, leaf_val = None, kwargs): 
-        '''Send the reward back up to the ancestors of the leaf
-        optional:
-            leaf_val: ValueNet evaluation of leaf
-        kwargs:
-            (for multiprocessing)
-            N: shared dict storing total visits
-            Q: shared dict storing total rewards
-            V: shared dict storing total value
-        '''
-        N = kwargs.get(h_N)
-        Q = kwargs.get(h_Q)
-        V = kwargs.get(h_V)
-        
+    def _backpropagate(self, path, reward, leaf_val, *args): 
+        '''Send the reward back up to the ancestors of the leaf'''
+        if args:
+            s_N, s_Q, s_V, _ = args 
         for node in reversed(path):
             self.N[node] += 1
             self.Q[node] += reward
-            if self.value_net:
+            if self.value_net != None:
                 self.V[node] += leaf_val
 
-            if h_N != None:
-                if repr(node) in h_N:
-                    h_N[repr(node)] += 1
-                    h_Q[repr(node)] += reward
-                    if self.value_net:
-                        h_V[repr(node)] += leaf_val
-                else:
-                    h_N[repr(node)] = 1
-                    h_Q[repr(node)] = reward
-    
+            #update the combined stats for parallel rollouts
+            if args: 
+                if node not in s_N or node not in s_Q:
+                    s_N[node] = 0 
+                    s_Q[node] = 0 
+                    if self.value_net and node not in s_V:
+                        s_V[node] = 0.0 
+                s_N[node] += 1
+                s_Q[node] += reward
+                if self.value_net != None:
+                    s_V[node] += leaf_val
             reward = 1 - reward
 
     def _puct_select(self, node):
@@ -180,15 +176,18 @@ class MCTS:
         return max(self.children[node], key=puct)
 
 # Now a helper function for parallelized rollouts
-def do_rollout(tree, node, n, **kwargs):
-    '''Do n rollouts on tree from root node and add tree stats to shared dictionaries'''
-    N = kwargs.get(N)
-    Q = kwargs.get(Q)
-    V = kwargs.get(V)
+def do_rollout(id, tree, node, n, *args):
+    '''Do n rollouts on tree from root node and update shared dictionaries
+    args for multiprocessing:
+        s_N: shared dict storing combined visits
+        s_Q: shared dict storing combined rewards
+        s_V: shared dict storing combined value
+        s_children: shared dict storing combined tree
+    '''
+    assert(len(args) == 4)
     for _ in range(n):
         # Get path to leaf of current search tree
         path = tree._descend(node)
-        print(f" I AM PROCESS {os.getpid()} FEAR ME")
 
         leaf = path[-1]
         if leaf.features is None:
@@ -197,7 +196,10 @@ def do_rollout(tree, node, n, **kwargs):
             leaf.set_value(tree.value_net)
         # Get result of rollout starting from leaf
         score = tree._simulate(leaf, gnu = True)
-        tree._backpropagate(path, score, leaf.value,**kwargs)
+        tree._backpropagate(path, score, leaf.value,*args)
+    
+    s_children = args[3]
+    s_children.update(tree.children) 
 
 class Go_MCTS(go.Game):
     """Wraps go.Game to turn it into a node for search tree expansion
@@ -216,28 +218,26 @@ class Go_MCTS(go.Game):
     def __init__(self, board=go.EMPTY_BOARD, ko=None, turn=0, moves=[],
                  sgf=None, terminal=False,
                  color=True, last_move=None, komi = 5.5, device = "cpu"):
-        super().__init__(board, ko, last_move, turn, moves, komi, sgf)
+        super(Go_MCTS,self).__init__(board, ko, last_move, turn, moves, komi, sgf)
         self.terminal = terminal 
         self.color = color
+        self.device = device
         self.dist = None
         self.features = None
         self.value = None
-        self.device = device 
 
     def __eq__(self, other):
-        return self.board == other.board and self.ko == other.ko
+        return self.board == other.board and self.ko == other.ko \
+                            and self.last_move == other.last_move
+    
+    def __hash__(self):
+        return go.Game.__hash__(self)
 
     def __copy__(self):
         return Go_MCTS(board=self.board, ko=self.ko, turn=self.turn,
                        moves=self.moves, terminal=self.terminal,
                        color=self.color, last_move=self.last_move,
                        komi = self.komi, device = self.device)
-
-    def __hash__(self):
-        return super().__hash__()
-
-    def __repr__(self):
-        return repr( (self.board, self.ko, self.self.last_move
 
     def find_children(self, policy):
         '''Returns a set of boards (Go_MCTS objects) derived from top policy moves'''
