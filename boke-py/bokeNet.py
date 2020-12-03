@@ -94,7 +94,8 @@ class ValueNet(nn.Module):
         return self.tanh(self.lin2(x))
 
 class Conv2dUntiedBias(nn.Module):
-    def __init__(self, height, width, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1):
+    def __init__(self, height, width, in_channels, out_channels, 
+                kernel_size, stride=1, padding=0, dilation=1, groups=1):
         super(Conv2dUntiedBias, self).__init__()
         kernel_size = _pair(kernel_size)
         stride = _pair(stride)
@@ -137,8 +138,9 @@ class NinebyNineGames(Dataset):
     def __init__(self, path):
         '''read boards csv from path.'''
         cols = pd.read_csv(path, nrows = 0).columns
-        self.boards = pd.read_csv(path, converters = {col: self.convert_type for col in cols}, low_memory = False)
-        self.path = path
+        self.boards = pd.read_csv(path, 
+                    converters = {col: self.convert_type for col in cols}, 
+                    low_memory = False)
 
     def __len__(self):
         return len(self.boards)
@@ -202,23 +204,27 @@ def features(game: go.Game):
     oppt[oppt == turn_num] = 0
     plyr *= turn_num 
     oppt *= -turn_num
-    empty = np.invert((plyr + oppt).astype(bool)).astype(float)
+    empty = np.invert((plyr + oppt).astype(bool)).astype(int)
 
     if color == go.BLACK:
-        turn = np.ones((1,9,9), dtype = float)
+        turn = np.ones((1,9,9))
     else:
-        turn = np.zeros((1,9,9), dtype = float)
+        turn = np.zeros((1,9,9))
 
-    last_mv = np.zeros(81, dtype = float)
+    last_mv = np.zeros(81)
     if isinstance(game.last_move, int) and game.last_move >= 0:
-        last_mv[game.last_move] = 1.0
+        last_mv[game.last_move] = 1
     last_mv = last_mv.reshape(1,9,9)
-    legal = np.array([game.is_legal(sq_c) for sq_c in range(81)], dtype = float) #very slow
-    libs = np.array(game.get_liberties(), dtype = float).reshape(9,9)
-    libs_after = np.zeros(81, dtype = float)
-    caps = np.zeros(81, dtype = float)
 
-    for sq_c in np.nonzero(legal)[0]:
+    legal_list = game.get_legal_moves()
+    legal = np.zeros(81)
+    legal[legal_list] = 1
+
+    libs = np.array(game.get_liberties()).reshape(9,9)
+    libs_after = np.zeros(81)
+    caps = np.zeros(81)
+
+    for sq_c in legal_list:
         new_board, opp_captured = go.get_caps(go.place_stone(color, game.board,sq_c), sq_c, color)
         if opp_captured:
             libs_after[sq_c] = go.get_stone_lib(new_board, sq_c)
@@ -232,7 +238,7 @@ def features(game: go.Game):
 
     def separate(arr):
         '''Separate into 7 layers'''
-        out = np.zeros((7,9,9), dtype = float)
+        out = np.zeros((7,9,9))
         for i in range(6):
             out[i, arr == i+1] = i+1
         out[6, arr >6] = 7

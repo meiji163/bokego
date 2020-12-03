@@ -1,7 +1,9 @@
 import go
 import os
 import re
+import tempfile
 import argparse
+from shutil import which
 from glob import glob
 from tqdm import trange
 from numpy.random import randint
@@ -45,8 +47,8 @@ def legal_sample(pi, game: go.Game, device = DEV):
         k += 1
     return move
 
-def write_board_sgf(game: go.Game, out_path):
-    '''write board to sgf (move sequence not available)'''
+def write_board_sgf(game: go.Game, out_path): 
+    '''write board sgf to file (move sequence not available)'''
     out = "(;GM[1]RU[Chinese]HA[0]SZ[9]KM[5.5]\n"
     W = "AW"
     B = "AB"
@@ -96,20 +98,23 @@ def write_sgf(moves, out_path, **kwargs):
 
 def gnu_score(game):
     '''Scores the game using gnugo opened in a subprocess.
-    Return 1 if black won, 0 if white won'''
-    temp = "/tmp/" + str(os.getpid())+".sgf" #put temp directory here
+    Return 1 if black won, -1 if white won'''
+    gnugo_path = which("gnugo")
+    if gnugo_path is None:
+        return
+    temp = tempfile.gettempdir() + f"/{os.getpid()}.sgf"
     write_board_sgf(game, temp) 
-    p =Popen(["gnugo", "--komi", "5.5", "--mode", "gtp", "--chinese-rules", "-l", temp], \
+    p =Popen([gnugo_path , "--komi", "5.5", "--mode", "gtp", "--chinese-rules", "-l", temp], \
                     stdin = PIPE, stdout = PIPE)
     p.stdin.write("final_score\n".encode('utf-8'))
     p.stdin.flush()
     rec = p.stdout.readline().decode('utf-8').strip('\n')
     p.communicate("quit\n".encode('utf-8'))
     os.remove(temp)
+
     res = re.search("[BW]\+.+",rec)
     if res:
-        return 1 if 'B' in res[0] else 0 
-    return
+        return 1 if 'B' in res[0] else -1
 
 def self_play(pi1, pi2, num_games, device = DEV):
     games = []
@@ -154,15 +159,15 @@ def reinforce(pi, pi_opp, optimizer, train_color, **kwargs):
             g = go.Game(moves = games[i])
             if len(g) < MAX_TURNS - 5:
                 print(len(g))
-            reward = 1 if (results[i] and train_color == "black")\
-                        or (not results[i] and train_color == "white")  else -1
+            reward = -results[i] if train_color == "white" else results[i]
             #replay the game to calculate the loss
             if train_color == "white":
                 g.play_move()
             for j in range(g.turn,len(g),2):
                 dist = policy_dist(pi, g, DEV)
                 mv = torch.tensor(g.moves[j]).to(device)
-                loss += -dist.log_prob(mv)*reward
+                loss += -dist.log_prob(mv)
+                loss *= reward
                 try:
                     g.play_move()
                     g.play_move()

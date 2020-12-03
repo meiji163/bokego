@@ -3,83 +3,67 @@ import os
 import random
 import itertools
 
-N = 9 #board size
-WHITE, BLACK, EMPTY = 'O', 'X', '.'
+N = 9 #supported board sizes: 9,13,19 
+WHITE, BLACK, EMPTY, FLOWER = 'O', 'X', '.', '+'
 EMPTY_BOARD = EMPTY*(N**2) 
 ENC = {BLACK: 1, WHITE: -1, EMPTY: 0}
 PASS = -1
 
-class IllegalMove(Exception):
-    def __init__(self, **kwargs):
-        super().__init__()
-        self.game = kwargs.get('game')
-        self.rule_type = kwargs.get('rule_type')
-        self.move = None
-        if 'sq_c' in kwargs:
-            self.move = unsquash(kwargs['sq_c'], alph = True)
-        elif 'alph_c' in kwargs:
-            self.move = kwargs['alph_c'] 
-        elif 'c' in kwargs:
-            c = kwargs['c']
-            self.move = unsquash(9*c[0]+c[1], alph = True)
-
-    def __str__(self):
-        if rule_type == "ko":
-            msg = f"\n{game}\n Move at {self.move} illegally retakes ko."
-        elif rule_type == "suicide":
-            msg = f"\n{game}\n Move at {self.move} is suicide."
-        elif rule_type == "off_board":
-            msg = f"Move is not on board"
-        elif rule_type == "not_empty":
-            msg = f"\n{game}\n There is already a stone at {self.move}"
-        else:
-            msg = ''
-        return msg
-
 class Game():
-    '''go.Game: a class to represent a go game.
-    Board coordinates are `squashed` (0 -- N**2).
+    '''go.Game: a class to represent a go game on NxN board. 
+    One instance is intended to play through a game once (no backtracking).
+
+    Board coordinates are `squashed` (x,y) --> N*x + y
     
-    attributes:
+    args:
+        sgf: path to sgf to load moves from
         board: length N**2 string of WHITE, BLACK, and EMPTY representing board
         ko: the coordinate of the current ko, None if no ko
         turn: turn number (starting from 0) 
         moves: list of moves played 
-        sgf: path to an sgf file to initialize moves from
-        hash: stored 64 bit Zobrist hash of game state
+        komi: the komi (default 5.5 for 9x9)
         '''
-    hash_table = [[ random.getrandbits(64) for _ in range(N*N)] for _ in range(4)]
+    _hash_table = [[ random.getrandbits(64) for _ in range(N*N)] for _ in range(4)]
 
     def __init__(self, board = EMPTY_BOARD,
-                ko = None, last_move = None, 
+                ko = None, last_move = go.PASS, 
                 turn = 0, moves = None, 
                 komi = 5.5, sgf = None):
+        self.sgf = sgf
+        if self.sgf:
+            self.moves = get_moves(sgf) 
+        else:
+            self.moves = moves 
+        self.last_move = last_move 
         self.turn = turn
         self.ko = ko
         self.board= board
         self.komi = komi
-        self.last_move = last_move
-        self.hash = None
-        if sgf:
-            self.moves = get_moves(sgf)
-        else:
-            self.moves = moves
+        self._hash = zobrist_hash(self.board, self.ko, self.last_move, Game._hash_table)  
         self._libs = None
 
     def __str__(self):
         out = self.board
-        if N == 9: #mark flower points
-            for i in [20,24,40,56,60]:
-                if out[i] == EMPTY:
-                    out = place_stone('+', out, i)
-        return "\t  " +' '.join(["ABCDEFGHJKLMNOPQRST"[i] for i in range(N)]) +"\n" \
-                + '\n'.join(['\t'+str(i + 1)+' '
+        #mark flower points
+        if N == 9:
+            flowers = (20,24,40,56,60)
+        elif N == 13:
+            flowers = (42, 48, 84, 120, 126) 
+        elif N == 19:
+            flowers = (180, 60, 66, 294, 72, 186, 174, 288, 300)
+        else:
+            flowers = tuple()
+        for i in flowers:
+            if out[i] == EMPTY:
+                out = place_stone(FLOWER, out, i)
+
+        def add_space(i): return '  ' if i<9 else ' '
+        return "\t   " +' '.join(["ABCDEFGHJKLMNOPQRST"[i] for i in range(N)]) +"\n" \
+                + '\n'.join(['\t'+str(i + 1)+ add_space(i) 
                 + ' '.join( out[N*i:N*(i+1)]) for i in range(N)])
     
     def __hash__(self):
-        if self.hash == None:
-            self.hash = zobrist_hash(self.board, self.ko, self.last_move, Game.hash_table)
-        return self.hash
+        return self._hash
 
     def __len__(self):
         if self.moves:
@@ -96,14 +80,14 @@ class Game():
         except ImportError:
             print("Numpy not found")
             return
-        return np.array([ENC[sq_c] for sq_c in self.board]).reshape(N,N)
+        return np.array([ENC[sq_c] for sq_c in self.board], dtype = np.int8).reshape(N,N)
 
     def play_pass(self):
-        if self.hash != None:
-            if self.ko != None:
-                self.hash ^= Game.hash_table[turn%2][self.ko]
-            if self.last_move != PASS and self.last_move != None:
-                self.hash ^= Game.hash_table[turn%2][self.last_move]
+        if self.ko != None:
+            self._hash ^= Game._hash_table[self.turn%2][self.ko]
+        if self.last_move != PASS and self.last_move != None:
+            self._hash ^= Game._hash_table[self.turn%2][self.last_move]
+
         if not self.moves:
             self.moves = [PASS]
         else:
@@ -113,9 +97,9 @@ class Game():
         self.last_move = PASS 
 
     def play_move(self, sq_c = None, testing = False):
-        '''Play move at sq_c. If no coordinate is given a move is played from self.moves.
+        '''Play move at sq_c. If no coordinate is given a move is played from moves list.
         optional: 
-            testing: stop game state from being modified (default False)''' 
+            testing: for testing legal moves''' 
         if sq_c is None:
             if self.turn >= len(self):
                 print("No moves to play.")
@@ -125,9 +109,9 @@ class Game():
             self.play_pass()
             return
         elif sq_c == self.ko:
-            raise IllegalMove(game = self, rule_type = "ko", sq_c = sq_c)
+            raise IllegalMove(self, rule_type = "ko", sq_c = sq_c)
         elif self.board[sq_c] != EMPTY:
-            raise IllegalMove(game = self, rule_type = "not_empty", sq_c = sq_c)
+            raise IllegalMove(self, rule_type = "not_empty", sq_c = sq_c)
         color = (WHITE if self.turn%2 ==1 else BLACK) 
         opp_color = (BLACK if color == WHITE else WHITE) 
         possible_ko_color = possible_ko(self.board, sq_c)
@@ -140,27 +124,27 @@ class Game():
         # Check for suicide
         new_board, captured = maybe_capture_stones(new_board, sq_c)
         if captured:
-            raise IllegalMove(game = self, rule_type = "suicide", sq_c = sq_c)
+            raise IllegalMove(self, rule_type = "suicide", sq_c = sq_c)
         if testing: return
 
+        self.get_liberties()
         if not self.moves:
             self.moves = [sq_c]
-        else:
+        elif not self.sgf:
             self.moves.append(sq_c)
 
-        if self.hash:
-            #update the Zobrist hash
-            self.hash ^= Game.hash_table[self.turn%2][sq_c]
-            if self.ko != None:
-                self.hash ^= Game.hash_table[2][self.ko]
-            if new_ko != None:
-                self.hash ^= Game.hash_table[2][new_ko]
-            if opp_captured:
-                for sq_b in opp_captured:
-                    self.hash ^= Game.hash_table[(self.turn + 1)%2][sq_b]
-            if self.last_move != PASS and self.last_move != None:
-                self.hash ^= Game.hash_table[(self.turn + 1)%2][self.last_move]
-            self.hash ^= Game.hash_table[3][sq_c]
+        #update the Zobrist hash
+        self._hash ^= Game._hash_table[self.turn%2][sq_c]
+        if self.ko != None:
+            self._hash ^= Game._hash_table[2][self.ko]
+        if new_ko != None:
+            self._hash ^= Game._hash_table[2][new_ko]
+        if opp_captured:
+            for sq_b in opp_captured:
+                self._hash ^= Game._hash_table[(self.turn + 1)%2][sq_b]
+        if self.last_move != PASS and self.last_move != None:
+            self._hash ^= Game._hash_table[(self.turn + 1)%2][self.last_move]
+        self._hash ^= Game._hash_table[3][sq_c]
 
         self.board = new_board
         self.last_move = sq_c
@@ -168,6 +152,17 @@ class Game():
         self.turn += 1 
 
     def is_legal(self, sq_c):
+        if sq_c == PASS:
+            return True
+        if self.board[sq_c] != EMPTY:
+            return False
+        empties = 0
+        for sq_b in NEIGHBORS[sq_c]:
+            if empties > 1:
+                return True
+            if self.board[sq_b] == EMPTY:
+                empties += 1
+        #last check: suicide or ko
         try:
             self.play_move(sq_c, testing = True)
             return True
@@ -175,8 +170,8 @@ class Game():
             return False
 
     def score(self):
-        '''Calculated using Tromp-Taylor rules 
-        (only accurate assuming dead groups are captured)'''
+        '''Return black's score minus white's score.
+        Calculated using Tromp-Taylor rules (only accurate assuming dead groups are captured)'''
         board = self.board
         while EMPTY in board:
             empty = board.index(EMPTY)
@@ -203,43 +198,106 @@ class Game():
                     for sq_s in stones:
                         self._libs[sq_s] = num_libs
                     board = bulk_place_stones('?', board, stones)
-
-        elif self.last_move != PASS and self._libs[self.last_move] == 0: 
         #liberties from previous state exist and not yet updated
+        elif self.last_move != PASS and self.last_move != None\
+                and self._libs[self.last_move] == 0: 
             seen = set()
             color = board[self.last_move]
-            for sq_b in NEIGHBORS[self.last_move]:
-                if not board[sq_b] == EMPTY and sq_b not in seen: 
+            for sq_b in NEIGHBORS[self.last_move] + [self.last_move]:
+                if board[sq_b] != EMPTY and sq_b not in seen: 
                     num_libs, stones = get_stone_lib(board, sq_b, return_grp = True)
                     for sq_s in stones:
                         self._libs[sq_s] = num_libs
                     seen |= stones 
-            if len(seen) == 0:
-                self._libs[sq_s] = 1    
         return list(self._libs)
+    
+    def get_legal_moves(self):
+        '''Return a list of all legal moves besides PASS'''
+        legal = set()
+        board = self.board
+        #find empties with flood fill
+        while EMPTY in board:
+            sq_c = board.index(EMPTY)
+            empties, _  = flood_fill(board, sq_c)
+            board = bulk_place_stones('?', board, empties)
+            if len(empties) > 1:
+                legal |= empties 
+            else:
+                #sq_c is possibly illegal
+                if self.is_legal(sq_c):
+                    legal.add(sq_c) 
+        return list(legal)
+        
+class IllegalMove(Exception):
+    '''A class to handle illegal moves.
+    args:
+        game: go.Game object
+    kwargs:
+        rule_type: type of illegal move - ko, suicide, not_empty, off_board
+        move: coordinate of legal move. Can be alph, tuple, or squashed.'''
+    def __init__(self, game, **kwargs):
+        super().__init__()
+        self.game = game
+        self.rule_type = kwargs.get('rule_type')
+        self.move = None
+
+        if 'sq_c' in kwargs:
+            self.move = unsquash(kwargs['sq_c'], alph = True)
+        elif 'alph_c' in kwargs:
+            self.move = kwargs['alph_c'] 
+        elif 'c' in kwargs:
+            c = kwargs['c']
+            self.move = unsquash(9*c[0]+c[1], alph = True)
+
+    def __str__(self):
+        if self.rule_type == "ko":
+            msg = f"\n{self.game}\n Move at {self.move} illegally retakes ko."
+        elif self.rule_type == "suicide":
+            msg = f"\n{self.game}\n Move at {self.move} is suicide."
+        elif self.rule_type == "off_board":
+            msg = f"Move is not on board"
+        elif self.rule_type == "not_empty":
+            msg = f"\n{self.game}\n There is already a stone at {self.move}"
+        else:
+            msg = ''
+        return msg + "\nlegal moves: " \
+                    + ', '.join(unsquash(self.game.get_legal_moves(), alph = True))
 
 #Helper functions 
 
 def squash(c, alph = False):
     '''Converts coordinate pair to single integer 0 -- N^2.
-    If a list of coordinates are passed, convert each element.
+    If a iterable of coordinates are passed, convert each element.
     optional:
         alph: squashes a letter-number coordinate '''
     if isinstance(c, list):
-        return list(map(squash, c))
+        return list(map(lambda x: squash(x, alph), c))
     if alph:
         #Letters skip I
-        y = 8 if c[0] == 'J' else ord(c[0]) - 65 
-        c = ( int(c[1]) - 1,  y)
+        if c[0] < 'J':
+            y = ord(c[0]) - 65
+        elif c[0] == 'J':
+            y = 8
+        else:
+            y = ord(c[0]) - 66
+        c = ( int(c[1:]) - 1,  y)
     return N * c[0] + c[1]
 
 def unsquash(sq_c, alph = False):
+    '''Converts squashed coordinate to coordinate pair.
+    optional:
+        alph: unsquash to a letter-number coordinate'''
     if isinstance(sq_c, list): 
-        return list(map(unsquash), sq_c) 
+        return list(map(lambda x: unsquash(x, alph), sq_c))
     else:
         c = divmod(sq_c, N)
         if alph:
-            letr = 'J' if c[1] == 8 else chr(c[1] + 65)
+            if c[1] < 8:
+                letr = chr(c[1] + 65)
+            elif c[1] == 8:
+                letr = 'J'
+            else:
+                letr = chr(c[1] +66)
             return letr + str(c[0] +1)
         return c
 
