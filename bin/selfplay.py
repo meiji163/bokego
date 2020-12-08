@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-import bokego.go as go
 from bokego.nnet import PolicyNet, policy_sample, policy_dist
+from bokego import go
 import os
 import re
 import argparse
@@ -15,7 +15,7 @@ from torch.distributions.categorical import Categorical
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 MAX_TURNS = 70
 
-def playout(game: go.Game, pi_1, pi_2, device = DEVICE):
+def playout(game, pi_1, pi_2, device = DEVICE):
     '''Playout game between policies pi_1 and pi_2, 
        with pi_1 playing first''' 
     while True:
@@ -32,7 +32,7 @@ def playout(game: go.Game, pi_1, pi_2, device = DEVICE):
         else:
             game.play_move(mv2.item())
 
-def legal_sample(pi, game: go.Game, device = DEVICE):
+def legal_sample(pi, game, device = DEVICE):
     move = policy_sample(pi, game, device)
     tries = 0
     color = go.BLACK if game.turn%2 == 0 else go.WHITE
@@ -72,7 +72,7 @@ def reinforce(pi, pi_opp, optimizer, train_color, **kwargs):
     '''
     n_itrs = kwargs.get("n_itrs", 60)
     bs = kwargs.get("bs", 16)
-    device = kwargs.get("device", DEV)
+    device = kwargs.get("device", DEVICE)
     stats = kwargs.get("stats")
     idn = kwargs.get("id", '')
 
@@ -89,14 +89,14 @@ def reinforce(pi, pi_opp, optimizer, train_color, **kwargs):
         for i in range(bs):
             loss = 0.0 
             g = go.Game(moves = games[i])
-            if len(g) < MAX_TURNS - 5:
-                print(len(g))
+            if len(g) < MAX_TURNS - 10:
+                print(f"Warning: short game {len(g)}")
             reward = -results[i] if train_color == "white" else results[i]
             #replay the game to calculate the loss
             if train_color == "white":
                 g.play_move()
             for j in range(g.turn,len(g),2):
-                dist = policy_dist(pi, g, DEV)
+                dist = policy_dist(pi, g, DEVICE)
                 mv = torch.tensor(g.moves[j]).to(device)
                 loss += -dist.log_prob(mv)
                 try:
@@ -105,15 +105,13 @@ def reinforce(pi, pi_opp, optimizer, train_color, **kwargs):
                 except go.IllegalMove:
                     break
 
-            if train_color == "black":
-                wins += results[i]
-            else:
-                wins += not results[i]
+            if reward == 1:
+                wins += reward
         winlist.append(wins)
 
         if len(winlist)>0 and len(winlist)%10 == 0:
             avg_win = sum(winlist[-10:])/(bs*10)
-            print(f"Winrate ({train_color}{id}): {avg_win:.2f}")
+            print(f"Winrate ({train_color}{idn}): {avg_win:.2f}")
 
         loss *= reward
         loss /= bs 
@@ -131,7 +129,7 @@ if __name__ == "__main__":
     parser.add_argument("-f", help = "file to write stats to", metavar = "PATH", type = str, 
                         dest = 'f', default = os.path.join(os.getcwd(), "RL_stats.txt"))
     parser.add_argument("-w", help = "path to look for weights", metavar = "PATH", type = str, dest = 'w',
-                        default = os.path.abspath(os.path.join("..", "bokego", "data", "weights")))
+                        default = os.path.abspath(os.path.join("..", "data", "weights")))
     args = parser.parse_args()
 
     mp.set_start_method("spawn")
@@ -139,7 +137,7 @@ if __name__ == "__main__":
     optimizer = torch.optim.AdamW(pi.parameters(), lr = 1e-5)
 
     policy_paths = glob( os.path.join( args.w, "policy_*.pt"))
-    n_opps = len(policy_paths) - 1
+    n_opps = len(policy_paths) -1
     print(f"Opponent pool size: {n_opps}")
 
     checkpt = torch.load(os.path.join(args.w, f"policy_{n_opps}.pt"), 
@@ -197,6 +195,8 @@ if __name__ == "__main__":
             processes.append(p_w)
         for p in processes:
             p.join()
+            if p.exitcode > 0:
+                raise ValueError(f'Training failed with exit code {p.exitcode}')
         
         with open(args.f, 'a+') as f:
             f.write(f"Policy {n_opps} vs. Policy {opp_id}\n")

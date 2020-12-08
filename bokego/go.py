@@ -487,7 +487,7 @@ def possible_eye(board, sq_c):
 def get_stones(board):
     black = set()
     white = set()
-    for sq_c in range(go.N**2):
+    for sq_c in range(N**2):
         if board[sq_c] == BLACK:
             black.add(sq_c)
         elif board[sq_c] == WHITE:
@@ -516,18 +516,14 @@ def gnu_score(game: Game):
     if gnugo_path is None:
         return
     temp = os.path.join(gettempdir(), f"{os.getpid()}.sgf")
-    write_board_sgf(game, temp) 
-    p =Popen([gnugo_path , "--komi", "5.5", "--mode", "gtp", "--chinese-rules", "-l", temp], \
+    sgf = write_sgf(game.moves, temp)
+    p =Popen([gnugo_path , "--chinese-rules", "--score", "-l", temp], \
                     stdin = PIPE, stdout = PIPE)
-    p.stdin.write("final_score\n".encode('utf-8'))
-    p.stdin.flush()
     rec = p.stdout.readline().decode('utf-8').strip('\n')
-    p.communicate("quit\n".encode('utf-8'))
+    p.communicate()
     os.remove(temp)
 
-    res = re.search("[BW]\+.+",rec)
-    if res:
-        return 1 if 'B' in res[0] else -1
+    return 1 if rec[0] == "B" else -1
 
 def write_sgf(moves, out_path, **kwargs): 
     '''
@@ -548,8 +544,7 @@ def write_sgf(moves, out_path, **kwargs):
     komi = kwargs.get("komi", 5.5)
     result = kwargs.get('result', '') 
 
-    today = date.today()
-    out = f"(;GM[1]HA[{handi}]RU[Chinese]DT[{today}]"
+    out = f"(;GM[1]HA[{handi}]RU[Chinese]"
     if B and W:
         out += f"PB[{B}]PW[{W}]"
     if result:
@@ -573,13 +568,12 @@ def write_board_sgf(game, out_path):
     out = f"(;GM[1]RU[Chinese]HA[0]SZ[{N}]KM[{game.komi}]\n"
     W = "AW"
     B = "AB"
-    black, white = get_stones(game.board)
     for i in range(N): 
         mv = game.board[i]
-        if mv == 'X':
+        if mv == BLACK:
             x, y = chr(i//9 + 97), chr(i%9 +97)
             B += f"[{x}{y}]" 
-        elif mv == 'O':
+        elif mv == WHITE:
             x, y = chr(i//9 + 97), chr(i%9 +97)
             W += f"[{x}{y}]" 
     turn = 'B' if game.turn%2 == 0 else 'W' 

@@ -13,8 +13,8 @@ setup(
     author = "meiji163, kyleschan, dukehhong", 
     author_email="mysatellite99@gmail.com",
     packages=["bokego"],
-    install_requires=["torch","numpy"]
-    extra_requires=["pandas", "tqdm"],
+    install_requires=["torch","numpy"],
+    extras_require=["pandas", "tqdm"],
     data_files=[("bokego", ["data/weights/value_1.pt", 
                 "data/weights/policy_0.pt",
                  "data/weights/policy_17.pt"]) ],
