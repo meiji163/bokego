@@ -57,7 +57,7 @@ class PolicyNet(nn.Module):
         return x 
 
 class ValueNet(nn.Module):
-    '''(27,9,9) torch.Tensor --> (1) toch.Tensor
+    '''(27,9,9) torch.Tensor --> (1) torch.Tensor
     Takes input from features(game: go.Game). 
     The output is the expected value of the game from current player's perspective; 
     win = 1, lose = -1
@@ -219,6 +219,7 @@ def features(game: go.Game):
     plyr *= turn_num 
     oppt *= -turn_num
     empty = np.invert((plyr + oppt).astype(bool)).astype(float)
+
     if color == go.BLACK:
         turn = np.ones((1,9,9), dtype = float)
     else:
@@ -305,7 +306,7 @@ class NinebyNineGames(Dataset):
                   and either "vals" or "moves" with size (n, 1)
         kwargs:
             out_path: path to save input/target tensors (default "./data.npz") 
-            transform: callable to apply to the data
+            transform: callable transformation to apply to the data
         '''
         self.out_path = kwargs.get("out_path", os.path.join(os.getcwd(), "data"))
         self.vals = False

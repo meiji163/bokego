@@ -13,11 +13,12 @@ setup(
     author = "meiji163, kyleschan, dukehhong", 
     author_email="mysatellite99@gmail.com",
     packages=["bokego"],
-    install_requires=["torch","numpy", "pandas", "tqdm"],
+    install_requires=["torch","numpy"]
+    extra_requires=["pandas", "tqdm"],
     data_files=[("bokego", ["data/weights/value_1.pt", 
                 "data/weights/policy_0.pt",
                  "data/weights/policy_17.pt"]) ],
-    python_requires=">=3.8.0",
+    python_requires=">=3.7.0",
     license="MIT",
     url="https://github.com/meiji163/BokeGo",
     classifiers = [

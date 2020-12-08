@@ -68,6 +68,14 @@ class MCTS:
             self.value_net_weight = 0.0
         else:
             self.value_net_weight = kwargs.get("value_net_weight",  0.5)
+        
+        #for GPU computations
+        self.device = kwargs.get("device", torch.device("cpu"))
+        policy_net.to(self.device)
+        if value_net != None:
+            value_net.to(self.device)
+
+        #initialize the root
         self.set_root(root)
 
     def __deepcopy__(self, memo):
@@ -259,7 +267,7 @@ class Go_MCTS(go.Game):
         turn: the turn number (starting from 0)
 
     Attributes:
-        dist: the policy net's prior distribution for the game state
+        dist: the policy net's distribution for the game state
         value: the value net valuation of the game state
         features: the input features for the game state
     """
@@ -365,7 +373,10 @@ class Go_MCTS(go.Game):
             return
         dist = MCTS._dist_cache.get(self)
         if dist is None:
-            dist = policy_dist(self.tree.policy_net, self, fts = self.features)
+            dist = policy_dist(self.tree.policy_net, 
+                                self, 
+                                fts = self.features,
+                                device = self.tree.device)
             MCTS._dist_cache[self] = dist 
         return dist
 
@@ -383,7 +394,9 @@ class Go_MCTS(go.Game):
             return
         val = MCTS._val_cache.get(self)
         if val is None:
-            val = nnet.value(self.tree.value_net, self, fts=self.features)
+            val = nnet.value(self.tree.value_net, self, 
+                            fts=self.features,
+                            device = self.tree.device)
             MCTS._val_cache[self] = val
         return val
     

@@ -41,7 +41,7 @@ class GTP(MCTS):
                      "set_fixed_handicap", "printsgf", "loadsgf",\
                      "analyze", "pondering")
 
-    #commands for mcts.Forest
+    #commands for Forest
     _forest_cmds = ("sync")
 
     def __init__(self, root,
@@ -58,7 +58,7 @@ class GTP(MCTS):
         self._move_history = []
         self._last_root = None 
         self._undid = False
-        self._input = ["quit"] 
+        self._input = [None] 
 
     def start(self): 
         self.running = True
@@ -66,6 +66,7 @@ class GTP(MCTS):
         #mainloop
         while self.running:
             self.get_input()
+
             while self._input[0] is None:
                 if self.pondering:
                     self.rollout(10)
@@ -77,14 +78,18 @@ class GTP(MCTS):
             if isinstance(out, Generator):
                 self.get_input()
                 while self._input[0] is None:
-                    print(next(out), end= '')
-                    sys.stdout.flush()
+                    try:
+                        print(next(out), end= '')
+                        sys.stdout.flush()
+                    except StopIteration:
+                        break
+                out = self.send(self._input[0])
+
+            if self._conn != None:
+                self._conn.send(out)
             else:
-                if self._conn != None:
-                    self._conn.send(out)
-                else:
-                    print(out, end = '')
-                    sys.stdout.flush()
+                print(out, end = '')
+                sys.stdout.flush()
         
     def stop(self):
         self._input[0] = "quit" 
@@ -359,18 +364,19 @@ class GTP(MCTS):
     
     def analyze(self, interval, k = 3):    
         '''Yield rollout information (visits, winrates, prior, variations)
-        updated at regular intervals 
+        updated at regular intervals until input is recieved
         args:
             interval (int): the update interval in centiseconds
             k (int): show the top k moves (default 3)'''
         variations = dict()
         yield "= \n"
-        while True:
+        while True: 
             self.timed_rollout( interval/200.0, 
                                 analyze_dict = variations )
             best_mvs = sorted(variations.keys(), 
                         key = lambda n: self.N[n])
-
+            if self._input[0] is not None:
+                break
             out = ""
             for n in best_mvs[-k:]:
                 mv = go.unsquash(n.last_move)
