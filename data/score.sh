@@ -1,6 +1,8 @@
 #!/bin/bash
 
-for file in data/*.sgf;
+# Scores SGF files with GNUGO
+
+for file in $1;
 do
     res="$(grep "RE\[\w*\]" $file)"
     if [ -z "$res" ]; then
