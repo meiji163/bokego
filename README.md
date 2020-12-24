@@ -1,5 +1,5 @@
 # Boke Go
-Boke is an open source GTP engine for 9x9 Go written in Python.\
+Boke is an open source GTP engine for 9x9 Go (Baduk/Weiqi) written in Python.\
 It uses a simplified implementation of the Monte Carlo Tree Search variant pioneered by AlphaGo<sup>[1](#1)</sup>.
 
 A version written in C is in development [here](https://github.com/dukehhong/bokego-c).
@@ -28,7 +28,7 @@ optional arguments:
 ```
 
 If you have a CUDA-enabled GPU, you can move the neural network computations to the GPU by setting
-USE_CUDA = True in boke.py.\
+`USE_CUDA = True` in boke.py.\
 Note this requires a [PyTorch](https://pytorch.org/get-started/locally/) build with CUDA
 
 GnuGo (B) vs. Boke (W)
