@@ -1,8 +1,8 @@
 # Boke Go
-Boke is an open source GTP engine for 9x9 Go (Baduk/Weiqi) written in pure Python.\
-It uses a simplified implementation of the Monte Carlo Tree Search variant pioneered by AlphaGo<sup>[1](#1)</sup>.
+Boke is an open source GTP engine for 9x9 Go (Baduk/Weiqi) written in pure Python. A version written in C is in development [here](https://github.com/dukehhong/bokego-c).\
+We use a simplified implementation of the Monte Carlo Tree Search variant pioneered by AlphaGo<sup>[1](#1)</sup>. For more details, see our [report](report.pdf).
 
-A version written in C is in development [here](https://github.com/dukehhong/bokego-c).
+
 
 ## Install
 To install bokego run
