@@ -239,7 +239,11 @@ def features(game: go.Game):
     caps = np.zeros(81)
     
     for sq_c in legal_list: 
-        new_board, opp_captured = go.get_caps(go.place_stone(color, game.board,sq_c), sq_c, color)
+        new_board, opp_captured = go.get_caps(
+                go.place_stone(color, game.board,sq_c),
+                sq_c, 
+                color
+        )
         if opp_captured:
             libs_after[sq_c] = go.get_stone_lib(new_board, sq_c)
             caps[sq_c] = len(opp_captured)
