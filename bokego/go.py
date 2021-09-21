@@ -19,7 +19,7 @@ from shutil import which
 from subprocess import Popen, PIPE
 from tempfile import gettempdir
 
-N = 9 #board sizes: 9, 13, 19 
+N = 9 #board size
 WHITE, BLACK, EMPTY, FLOWER = 'O', 'X', '.', '+'
 EMPTY_BOARD = EMPTY*(N**2) 
 
@@ -29,6 +29,7 @@ RESIGN = -2
 FLOWERS9 = (20,60,24,56,40)
 FLOWERS13 = (42, 126, 48, 120, 84) 
 FLOWERS19 = (60, 300, 72, 288, 66, 174, 180, 186, 294 )
+
 
 class Game():
     '''A class to represent a go game on a NxN board. 
@@ -48,10 +49,14 @@ class Game():
     _hash_table = [[ getrandbits(64) for _ in range(N*N)] for _ in range(3)]
     _flip = getrandbits(64) 
 
-    def __init__(self, board = EMPTY_BOARD, 
-                ko = None, last_move = None, 
-                turn = 0, moves = None, 
-                komi = 5.5, sgf = None):
+    def __init__(self, 
+                board = EMPTY_BOARD, 
+                ko = None, 
+                last_move = None, 
+                turn = 0, 
+                moves = None, 
+                komi = 5.5, 
+                sgf = None):
         self.sgf = sgf
         if self.sgf:
             self.moves = get_moves(sgf) 
@@ -367,10 +372,6 @@ def unsquash(sq_c, alph = True):
 def is_on_board(c):
     return c[0] % N == c[0] and c[1] % N == c[1]
 
-NEIGHBORS = [squash(list( filter(is_on_board, [(x+1, y), (x-1, y), (x, y+1), (x, y-1)]))) \
-                for x in range(N) for y in range(N)] 
-DIAGONALS = [squash(list( filter(is_on_board, [(x+1,y+1), (x+1, y-1), (x-1, y-1), (x-1, y-1)]))) \
-                for x in range(N) for y in range(N)] 
 
 def flood_fill(board, sq_c):
     '''Floodfill board starting from coord. Returns set containing
@@ -457,6 +458,15 @@ def play_move_incomplete(board, sq_c, color):
     for sq_s in my_stones:
         board, _ = maybe_capture_stones(board, sq_s)
     return board
+
+NEIGHBORS = [squash(list( 
+                filter(is_on_board, [(x+1, y), (x-1, y), (x, y+1), (x, y-1)]))) \
+                for x in range(N) for y in range(N)
+            ] 
+DIAGONALS = [squash(list( 
+                filter(is_on_board, [(x+1,y+1), (x+1, y-1), (x-1, y-1), (x-1, y-1)]))) \
+                for x in range(N) for y in range(N)
+            ] 
 
 def possible_ko(board, sq_c):
     '''Check if sq_c is surrounded by one color, and return that color'''

@@ -15,125 +15,94 @@ import torch.nn.functional as F
 
 SOFT = nn.Softmax(dim = 1)
 
-#v0.3 Policy Net
-class PolicyNet(nn.Module):
-    '''(27,9,9) torch.Tensor --> (81) torch.Tensor
-    Takes input from features(game: go.Game). 
-    The softmax of the output is the prior distribution over moves (0--80)
+class ResidualBlock(nn.Module):
+    expansion = 1
+    def __init__(self, in_channels, out_channels, stride=1):
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.conv1 = nn.Conv2d(in_channels, out_channels, 
+                                kernel_size=3, 
+                                stride=stride, 
+                                padding=1, 
+                                bias=False)
+        self.bn1 = nn.BatchNorm2d(out_channels)
+        self.conv2 = nn.Conv2d(out_channels, out_channels, 
+                                kernel_size=3, 
+                                stride=1, 
+                                padding=1, 
+                                bias=False)
+        self.bn2 = nn.BatchNorm2d(out_channels)
+        
+        if self.in_channels != self.out_channels:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(
+                    self.in_channels, 
+                    self.out_channels * self.expansion, 
+                    kernel_size=1,
+                    stride=stride, 
+                    bias=False
+                ),
+                nn.BatchNorm2d(self.out_channels * self.expansion)
+            ) 
+        else:
+            self.shortcut = nn.Identity()
     
-    Layers:
-        1 5x5 convolution: 9x9 -> 9x9
-        6 3x3 convolution: 9x9 -> 9x9
-        1 1x1 convolution with untied bias: 9x9 -> 9x9
-    '''
-    def __init__(self):
-        super(PolicyNet, self).__init__()
-        self.conv = nn.Sequential(
-                nn.Conv2d(27,128,5, padding = 2),
-                nn.BatchNorm2d(128),
-                nn.ReLU(),
-                nn.Conv2d(128,128,3, padding =1),
-                nn.BatchNorm2d(128),
-                nn.ReLU(),
-                nn.Conv2d(128,128,3, padding = 1),
-                nn.BatchNorm2d(128),
-                nn.ReLU(),
-                nn.Conv2d(128,128,3, padding = 1),
-                nn.BatchNorm2d(128),
-                nn.ReLU(),
-                nn.Conv2d(128,128,3, padding = 1),
-                nn.BatchNorm2d(128),
-                nn.ReLU(),
-                nn.Conv2d(128,128,3, padding = 1),
-                nn.BatchNorm2d(128),
-                nn.ReLU(),
-                nn.Conv2d(128,128,3, padding = 1),
-                nn.BatchNorm2d(128),
-                nn.ReLU(),
-                Conv2dUntiedBias(9,9,128,1,1))
-    def forward(self, x):
-        x = self.conv(x)
-        x = x.view(-1, 81)
+    def forward(self, x): 
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.bn2(self.conv2(out))
+        out += self.shortcut(x)
+        out = F.relu(out)
+        return out
+    
+class ResNet(nn.Module):
+    def __init__(self, n_blocks=5, channels=100):
+        super(ResNet, self).__init__()
+        self.channels = channels
+        self.conv = nn.Conv2d(22,channels,
+                              kernel_size=5,
+                              padding=2,
+                              bias=False
+                             )
+        self.bn = nn.BatchNorm2d(channels)
+        layers = []
+        for _ in range(n_blocks):
+            layers.append( ResidualBlock(channels,channels) )
+        self.blocks = nn.Sequential(*layers)
+    
+    def forward(self,x):
+        x = self.bn( self.conv(x) )
+        x = F.relu(x)
+        x = self.blocks(x)
         return x 
+
+class PolicyNet(nn.Module):
+    def __init__(self, n_blocks=5, channels=100):
+        super(PolicyNet, self).__init__()
+        self.channels = channels
+        self.res = ResNet(n_blocks, channels)
+        self.untied = Conv2dUntiedBias(9,9,channels,1,1)
+    
+    def forward(self,x):
+        x = self.res(x)
+        x = self.untied(x)
+        return x
 
 class ValueNet(nn.Module):
-    '''(27,9,9) torch.Tensor --> (1) torch.Tensor
-    Takes input from features(game: go.Game). 
-    The output is the expected value of the game from current player's perspective; 
-    win = 1, lose = -1
-    
-    Layers:
-        1 5x5 convolution: 9x9 -> 9x9
-        6 3x3 convolutions: 9x9 -> 9x9
-        1 convolution with untied bias: 9x9 -> 9x9
-        2 fully connected layers 81 -> 64 -> 1
-    '''
-    def __init__(self):
+    def __init__(self, n_blocks=5, channels=100):
         super(ValueNet, self).__init__()
-        self.conv = nn.Sequential(
-                nn.Conv2d(27,128,5, padding = 2),
-                nn.BatchNorm2d(128),
-                nn.ReLU(),
-                nn.Conv2d(128,128,3, padding =1),
-                nn.BatchNorm2d(128),
-                nn.ReLU(),
-                nn.Conv2d(128,128,3, padding = 1),
-                nn.BatchNorm2d(128),
-                nn.ReLU(),
-                nn.Conv2d(128,128,3, padding = 1),
-                nn.BatchNorm2d(128),
-                nn.ReLU(),
-                nn.Conv2d(128,128,3, padding = 1),
-                nn.BatchNorm2d(128),
-                nn.ReLU(),
-                nn.Conv2d(128,128,3, padding = 1),
-                nn.BatchNorm2d(128),
-                nn.ReLU(),
-                nn.Conv2d(128,128,3, padding = 1),
-                nn.BatchNorm2d(128),
-                nn.ReLU(),
-                Conv2dUntiedBias(9,9,128,1,1))
-        self.lin1 = nn.Linear(81,64)
-        self.lin2 = nn.Linear(64,1)
-        self.bn = nn.BatchNorm2d(1) 
-        self.lin_bn = nn.BatchNorm1d(64)
-        self.relu = nn.ReLU()
+        self.channels = channels
+        self.res = ResNet(n_blocks,channels)
+        self.untied = Conv2dUntiedBias(9,9,channels,1,1)
+        self.lin = nn.Linear(81,1)
         self.tanh = nn.Tanh()
-
-    def load_policy_dict(self, policy_dict):
-        '''load convolution weights from a PolicyNet state dict'''
-        new_dict = self.state_dict()
-        new_dict.update(policy_dict)
-        self.load_state_dict(new_dict)
-
-    def forward(self, x):
-        x = self.relu(self.bn(self.conv(x)))
-        x = x.view(-1, 81)
-        x = self.relu(self.lin_bn(self.lin1(x)))
-        return self.tanh(self.lin2(x))
-
-#v0.2 Policy Net 
-class PolicyNet_v2(nn.Module):
-    def __init__(self):
-        super(PolicyNet_v2, self).__init__()
-        self.conv = nn.Sequential(
-                nn.Conv2d(27,64,5, padding = 2),
-                nn.ReLU(),
-                nn.Conv2d(64,128,3, padding =1),
-                nn.ReLU(),
-                nn.Conv2d(128,128,3, padding = 1),
-                nn.ReLU(),
-                nn.Conv2d(128,128,3, padding = 1),
-                nn.ReLU(),
-                nn.Conv2d(128,128,3, padding = 1),
-                nn.ReLU(),
-                nn.Conv2d(128,128,3, padding = 1),
-                nn.ReLU(),
-                Conv2dUntiedBias(9,9,128,1,1))
-    def forward(self, x):
-        x = self.conv(x)
-        x = x.view(-1, 81)
-        return x 
+    
+    def forward(self,x):
+        x = self.res(x)
+        x = F.relu(self.untied(x))
+        x = x.view(-1,81)
+        x = self.tanh( self.lin(x) )
+        return x
 
 class Conv2dUntiedBias(nn.Module):
     def __init__(self, height, width, 
@@ -183,7 +152,7 @@ def features(game: go.Game):
     ''' go.Game --> (27,9,9) torch.Tensor
         Compute the input features from the board state
         
-        9x9 layer index: feature
+        layer index: feature
         ------------------------
         0: player stones        
             1 if coord has player's stones, else 0
@@ -197,16 +166,11 @@ def features(game: go.Game):
             1 if coord was last move, else 0
         5: legal                
             1 if coord is legal move for player, else 0
-        6-12: liberties         
-            n if stone at coord has n liberties, else 0
-            layer 5 has coords with 1 liberty
-            layer 6 has coords with 2 liberties
-            ...
-            layer 11 has coords with >6 liberties
-        13-19: liberties after playing
-            n if coord is a legal move and player's stone has n liberties after playing, else 0
-            liberties are separated the same way as 5-11
-        20-26: number of captures
+        6-11: liberties         
+            coords with 0,1,2,3,4,5, >5 liberties
+        12-16: liberties after playing
+            liberties after playing at coord
+        17-23: number of captures
             n if playing at coord would capture n opponent stones, else 0
             number of captures are separated the same way as 5-11
         '''
@@ -254,15 +218,25 @@ def features(game: go.Game):
     caps = caps.reshape(9,9)
     legal = legal.reshape(1,9,9)
 
-    def separate(arr):
-        out = np.zeros((7,9,9), dtype = float)
-        for i in range(6):
-            out[i, arr == i+1] = i+1
-        out[6, arr >6] = 7
+    def separate(arr, n_layers):
+        out = np.zeros((n_layers,9,9), dtype = np.float32)
+        for i in range(n_layers):
+            out[i, arr == i] = 1.
+        out[n_layers-1, arr>=n_layers] = 1.
         return out 
 
-    fts = np.vstack( [plyr, oppt, empty, turn, last_mv, legal,\
-            separate(libs) , separate(libs_after) , separate(caps)])
+    fts = np.vstack([
+            plyr, 
+            oppt, 
+            empty, 
+            turn, 
+            last_mv, 
+            legal,
+            separate(libs, n_layers=6), 
+            separate(libs_after, n_layers=6), 
+            separate(caps, n_layers=4)
+        ])
+
     return torch.from_numpy(fts).float()
 
 
