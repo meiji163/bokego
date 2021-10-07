@@ -1,5 +1,6 @@
 '''
 This module contains a Game class that represents a game of go (baduk/weiqi) and several utilities.
+See docstrings for further info on a class or function.
 
 Coordinates:
     For an an NxN board 
@@ -10,18 +11,43 @@ Coordinates:
             Follows western convention: letter A - T excluding I, number 1 - N.
     Methods in this module use squashed coordinates. 
     Use the squash and unsquash functions to convert between coordinate types.
+
+Classes:
+    Game: represents a go game on NxN board. 
+        One instance is intended to play through a game once (no backtracking)
+
+    IllegalMove(Exception): Error to handle different types of illegal moves
+
+Board Utilities:
+    squash(c) -> int
+    unsquash(sq_c, alph = True) -> (int, int)
+    possible_ko(board, sq_c) -> bool
+    possible_eye(board, sq_c) -> bool
+    get_stone_lib(board, sq_c) -> int
+    get_caps(board, sq_c, color) -> (Game, [ int ])
+    get_stones(board) -> ([ int ], [ int ])
+    gnu_score(game) -> int
+    maybe_capture_stones(board, sq_c) -> (string, [ int ])
+
+SGF Utilities:
+    get_moves(sgf) -> [ int ]
+    write_sgf(moves, out_path, **kwargs) -> None
+    write_board_sgf(game, out_path) -> None 
 '''
 import re
 import os
-from random import getrandbits
+from random import getrandbits, seed
 from datetime import date 
 from shutil import which
 from subprocess import Popen, PIPE
 from tempfile import gettempdir
 
+import numpy as np # only needed for Game.to_numpy
+
 N = 9 #board size
 WHITE, BLACK, EMPTY, FLOWER = 'O', 'X', '.', '+'
 EMPTY_BOARD = EMPTY*(N**2) 
+ENCODE = {BLACK: 1, WHITE: -1, EMPTY: 0}
 
 PASS = -1
 RESIGN = -2
@@ -29,7 +55,6 @@ RESIGN = -2
 FLOWERS9 = (20,60,24,56,40)
 FLOWERS13 = (42, 126, 48, 120, 84) 
 FLOWERS19 = (60, 300, 72, 288, 66, 174, 180, 186, 294 )
-
 
 class Game():
     '''A class to represent a go game on a NxN board. 
@@ -39,13 +64,24 @@ class Game():
 
     args:
         sgf (str): path to sgf to load moves from
-        boardi (str): length N**2 string of WHITE, BLACK, and EMPTY representing board
+        board (str): length N**2 string of WHITE, BLACK, and EMPTY representing board
         ko (int): the squashed coord of the current ko, None if no ko
         turn (int): turn number (starting from 0) 
         moves (list): list of squashed coords of moves played 
         komi (float): the komi (default 5.5 for 9x9)
-    '''
 
+    methods:
+        is_legal(sq_c) -> bool
+        play_move(sq_c) -> None
+        play_pass() -> None
+        get_liberties() -> None
+        score() -> int
+        get_legal_moves() -> [ int ]
+        zobrist_hash() -> int
+        to_numpy() -> N x N numpy array
+    '''
+    
+    seed(163)
     _hash_table = [[ getrandbits(64) for _ in range(N*N)] for _ in range(3)]
     _flip = getrandbits(64) 
 
@@ -103,13 +139,7 @@ class Game():
         
     def to_numpy(self):
         '''Convert board to (N,N) numpy array'''
-        try:
-            import numpy as np
-        except ImportError:
-            print("Numpy not found")
-            return
-        encode = {BLACK: 1, WHITE: -1, EMPTY: 0}
-        return np.array([encode[sq_c] for sq_c in self.board], dtype = np.int8).reshape(N,N)
+        return np.array([ENCODE[sq_c] for sq_c in self.board], dtype = np.int8).reshape(N,N)
 
     def play_pass(self):
         if self._hash != None:
@@ -323,7 +353,7 @@ class IllegalMove(Exception):
                     + ', '.join(unsquash(self.game.get_legal_moves()))
         return msg
 
-#Helper functions 
+####### board utilities ####### 
 def squash(c):
     '''Converts coord pair (x,y) or an alpha-numeric coord to a squashed coord.
     If list of coordinates are passed, converts each element.'''
@@ -403,20 +433,20 @@ def get_stone_lib(board, sq_c, return_grp = False):
     return num_libs
 
 def get_caps(board, sq_c, color):
-        opp_color = BLACK if color == WHITE else WHITE
-        opp_stones = []
-        my_stones = []
-        for sq_n in NEIGHBORS[sq_c]:
-            if board[sq_n] == color:
-                my_stones.append(sq_n)
-            elif board[sq_n] == opp_color:
-                opp_stones.append(sq_n)
-        opp_captured = []
-        for sq_s in opp_stones:
-            new_board, captured = maybe_capture_stones(board, sq_s)
-            opp_captured += captured
-        new_board = bulk_place_stones(EMPTY, board, opp_captured)
-        return new_board, opp_captured
+    opp_color = BLACK if color == WHITE else WHITE
+    opp_stones = []
+    my_stones = []
+    for sq_n in NEIGHBORS[sq_c]:
+        if board[sq_n] == color:
+            my_stones.append(sq_n)
+        elif board[sq_n] == opp_color:
+            opp_stones.append(sq_n)
+    opp_captured = []
+    for sq_s in opp_stones:
+        new_board, captured = maybe_capture_stones(board, sq_s)
+        opp_captured += captured
+    new_board = bulk_place_stones(EMPTY, board, opp_captured)
+    return new_board, opp_captured
 
 def place_stone(color, board, sq_c):
     return board[:sq_c] + color + board[sq_c+1:]
@@ -504,7 +534,7 @@ def get_stones(board):
             white.add(sq_c)
     return black, white
 
-#sgf utilities
+####### sgf utilities #######
 
 def get_moves(sgf):
     if not os.path.exists(sgf):

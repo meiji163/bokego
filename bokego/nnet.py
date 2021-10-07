@@ -339,7 +339,7 @@ def rand_rot(features, moves = None):
 def compose(*args):
     def compose_two(f,g):
         return lambda x: f(g(x))
-    return reduce(compose, arg, lambda x: x)
+    return reduce(compose_two, args, lambda x: x)
 
 def process_csv(path, npz_name):
     cols = pd.read_csv(path, nrows = 0).columns
@@ -360,4 +360,3 @@ def process_csv(path, npz_name):
             targets[i] = target
     np.savez_compressed(npz_name, features = fts, targets = targets)
      
-    

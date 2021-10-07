@@ -10,7 +10,7 @@ setup(
     version = "0.3",
     description = "A 9x9 Go engine",
     long_description = long_description,
-    author = "meiji163, kyleschan, dukehhong", 
+    author = "Meijke Balay, Kyle Chan",
     author_email="mysatellite99@gmail.com",
     packages=["bokego"],
     install_requires=["torch","numpy", "pandas"],
