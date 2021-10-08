@@ -327,7 +327,7 @@ def squash(c):
     elif isinstance(c, str):
         c = c.upper()
         if c == "PASS":
-            return go.PASS
+            return PASS
 
         m = re.match(r"([A-T])(\d+)", c)
         if m is None:
