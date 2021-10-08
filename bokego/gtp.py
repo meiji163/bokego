@@ -342,8 +342,8 @@ class GTP(MCTS):
         else:
             condition = self.surrender 
         if condition:
-                self.running = False
-                return go.RESIGN
+            self.running = False
+            return go.RESIGN
 
         if self.time_lim:
             self.timed_rollout(self.time_lim)
