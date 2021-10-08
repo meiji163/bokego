@@ -96,7 +96,7 @@ class MCTS:
         del state_dict["value_net"] 
         return state_dict
     
-    def __setstate_(self, state_dict):
+    def __setstate__(self, state_dict):
         self.__dict__.update(state_dict)
         #give the nodes a reference to the tree
         for n in self.children:
