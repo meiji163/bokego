@@ -61,7 +61,7 @@ class MCTS:
         self.expand_thresh = kwargs.get("expand_thresh",100)
         self.branch_num = kwargs.get("branch_num")
         self.exploration_weight = kwargs.get("exploration_weight", 4.0)
-        self.noise_weight = kwargs.get("noise_weight", 0.25)
+        self.noise_weight = kwargs.get("noise_weight", 0)
         if self.no_sim:
             self.value_net_weight = 1.0
         elif self.value_net is None:
@@ -377,6 +377,7 @@ class Go_MCTS(go.Game):
                                 self, 
                                 fts = self.features,
                                 device = self.tree.device)
+            dist.probs = dist.probs.to(torch.device("cpu"))
             MCTS._dist_cache[self] = dist 
         return dist
 

@@ -8,23 +8,24 @@ from bokego.nnet import PolicyNet, ValueNet, PolicyNet_v2
 from bokego.mcts import Go_MCTS 
 from bokego import PKG_PATH 
 
-USE_CUDA = False
 torch.set_grad_enabled(False)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "BokeGo v0.3 GTP Engine")
-    parser.add_argument("-t", metavar="SEC", type = float, dest = 't', 
+    parser.add_argument("-t", metavar="SEC", type = float, dest = 't',
                         help = "time limit in seconds for each move", default = 10.0)
     parser.add_argument("-r", dest = 'r', type = int, help = "number of rollouts per move")
     parser.add_argument("-p", metavar="PATH", type = str, dest = 'p', help = "path to policy weights",
                         default = os.path.join( "data", "weights", "policy_0.pt"))
     parser.add_argument("-v", metavar="PATH", type = str, dest = 'v', help = "path to value weights", 
-                        default = os.path.join("data","weights", "value_1.pt")) 
-    parser.add_argument("--simulate", action = "store_true", 
+                        default = os.path.join("data","weights", "value_1.pt"))
+    parser.add_argument("-g", "--gpu", action = "store_true", 
+                        help = "Accelerate NN forward by GPU.")
+    parser.add_argument("--simulate", action = "store_true",
                         help = "enable simulations to end of game (slow)")
     args = parser.parse_args()
 
-    device = torch.device("cuda" if USE_CUDA else "cpu")
+    device = torch.device("cuda" if (args.gpu and torch.cuda.is_available()) else "cpu")
 
     pi = PolicyNet()
     p_weight = torch.load(args.p, map_location= device)
