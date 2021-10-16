@@ -149,7 +149,14 @@ class GTP(MCTS):
             valid = True
 
         elif cmd[0] == "komi":
-            valid = True
+            if len(cmd) <2: 
+                out = "usage: komi <num-komi>"
+            else:
+                try:
+                    self.root.komi = float(cmd[1])
+                    valid = True
+                except:
+                    out = "invalid komi value"
 
         elif cmd[0] == "play":
             if len(cmd) <3 or not cmd[1] in GTP.colors: 
