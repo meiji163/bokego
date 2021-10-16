@@ -149,7 +149,14 @@ class GTP(MCTS):
             valid = True
 
         elif cmd[0] == "komi":
-            valid = True
+            if len(cmd) <2: 
+                out = "usage: komi <num-komi>"
+            else:
+                try:
+                    self.root.komi = float(cmd[1])
+                    valid = True
+                except:
+                    out = "invalid komi value"
 
         elif cmd[0] == "play":
             if len(cmd) <3 or not cmd[1] in GTP.colors: 
@@ -247,10 +254,12 @@ class GTP(MCTS):
 
         elif cmd[0] == "final_score":
             score = self.root.score()
-            if score>0:
-                out = f"B+{-score}"
+            if abs(score) < 1e-4:
+                out = f"0"
+            elif score>0:
+                out = f"B+{score}"
             else:
-                out = f"W+{score}"
+                out = f"W+{-score}"
             valid = True
 
         elif cmd[0] == "move_history":
@@ -277,7 +286,7 @@ class GTP(MCTS):
                 outpath = cmd[1]
             else:
                 outpath = os.path.join(os.getcwd(), "bokego.sgf")
-            out = go.write_sgf(self._move_history, outpath)
+            out = go.write_sgf(self._move_history, outpath, komi=self.root.komi)
             valid = True
 
         elif cmd[0] == "loadsgf":
