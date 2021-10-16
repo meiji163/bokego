@@ -286,7 +286,7 @@ class GTP(MCTS):
                 outpath = cmd[1]
             else:
                 outpath = os.path.join(os.getcwd(), "bokego.sgf")
-            out = go.write_sgf(self._move_history, outpath)
+            out = go.write_sgf(self._move_history, outpath, komi=self.root.komi)
             valid = True
 
         elif cmd[0] == "loadsgf":
