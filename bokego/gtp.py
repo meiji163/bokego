@@ -254,10 +254,12 @@ class GTP(MCTS):
 
         elif cmd[0] == "final_score":
             score = self.root.score()
-            if score>0:
-                out = f"B+{-score}"
+            if abs(score) < 1e-4:
+                out = f"0"
+            elif score>0:
+                out = f"B+{score}"
             else:
-                out = f"W+{score}"
+                out = f"W+{-score}"
             valid = True
 
         elif cmd[0] == "move_history":
