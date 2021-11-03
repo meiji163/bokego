@@ -385,6 +385,7 @@ class GTP(MCTS):
             best_mvs = sorted(variations.keys(), 
                         key = lambda n: self.N[n])
             if self._input[0] is not None:
+                yield "\n"
                 break
             out = ""
             for n in best_mvs[-k:]:
