@@ -55,7 +55,7 @@ class MCTS:
             raise TypeError("Missing required keywork argument: 'policy_net'")
         self.policy_net = policy_net
         self.value_net = value_net
-        self.no_sim = kwargs.get("no_sim", False)
+        self.no_sim = kwargs.get("no_sim", True)
         if self.value_net is None and self.no_sim:
             raise TypeError("Keyword argument 'value_net' is required for no simulation mode")
         self.expand_thresh = kwargs.get("expand_thresh",100)
@@ -214,6 +214,7 @@ class MCTS:
                 reward = -reward 
             if self.value_net != None:
                 self.V[node] += leaf_val
+                leaf_val = -leaf_val
 
     def _puct_select(self, node):
         "Select a child of node with PUCT"
@@ -226,7 +227,7 @@ class MCTS:
             avg_reward = 0 if self.N[n] == 0 else \
                     ((1 - self.value_net_weight) * self.Q[n]
                      + self.value_net_weight * self.V[n]) / self.N[n]
-            return avg_reward + (self.exploration_weight
+            return -avg_reward + (self.exploration_weight
                     * last_move_prob 
                     * sqrt(total_visits) / (1 + self.N[n]))
 
