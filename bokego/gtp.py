@@ -393,7 +393,7 @@ class GTP(MCTS):
                 variation = go.unsquash( [m.last_move for m in variations[n] ]) 
                 prior = self.root.dist.probs[n.last_move]
                 out += f"info move {mv} visits {self.N[n]} "\
-                       f"winrate {10000*n.winrate:.0f} "\
+                       f"winrate {10000*(1-n.winrate):.0f} "\
                        f"prior {10000*prior:.0f} "\
                       "pv " + " ".join(variation) + " "
             yield out + "\n"
